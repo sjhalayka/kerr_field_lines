@@ -170,6 +170,7 @@ void worker_thread(
 	const real_type receiver_distance,
 	const real_type receiver_distance_plus,
 	const real_type receiver_radius,
+	const real_type epsilon,
 	real_type& result_count,
 	real_type& result_count_plus)
 {
@@ -218,16 +219,16 @@ void worker_thread(
 		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
 		
 		vector_3 right_min_location = aabb_min_location;
-		right_min_location.x += receiver_radius;
+		right_min_location.x += epsilon;
 
 		vector_3 right_max_location = aabb_max_location;
-		right_max_location.x += receiver_radius;
+		right_max_location.x += epsilon;
 
 		vector_3 left_min_location = aabb_min_location;
-		left_min_location.x -= receiver_radius;
+		left_min_location.x -= epsilon;
 
 		vector_3 left_max_location = aabb_max_location;
-		left_max_location.x -= receiver_radius;
+		left_max_location.x -= epsilon;
 
 		local_count += intersect(
 			location, normal,
@@ -294,7 +295,8 @@ real_type get_intersecting_line_density(
 	const real_type emitter_radius,
 	const real_type receiver_distance,
 	const real_type receiver_distance_plus,
-	const real_type receiver_radius)
+	const real_type receiver_radius,
+	const real_type epsilon)
 {
 	// Reset global progress counter
 	global_progress.store(0, std::memory_order_relaxed);
@@ -340,6 +342,7 @@ real_type get_intersecting_line_density(
 			receiver_distance,
 			receiver_distance_plus,
 			receiver_radius,
+			epsilon,
 			std::ref(thread_counts[t]),
 			std::ref(thread_counts_plus[t])
 		);
@@ -429,7 +432,8 @@ int main(int argc, char** argv)
 				emitter_radius_geometrized,
 				receiver_distance_geometrized,
 				receiver_distance_plus_geometrized,
-				receiver_radius_geometrized);
+				receiver_radius_geometrized,
+				epsilon);
 
 		// alpha variable
 		const real_type gradient_integer =
