@@ -67,20 +67,69 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 real_type intersect(
 	const vector_3 location,
 	const vector_3 normal,
-	const real_type receiver_distance,
-	const real_type receiver_radius)
+	const vector_3 aabb_min_location,
+	const vector_3 aabb_max_location)
 {
-	const vector_3 circle_origin(receiver_distance, 0, 0);
+	//const vector_3 circle_origin(receiver_distance, 0, 0);
 
-	if (normal.dot(circle_origin) <= 0)
-		return 0.0;
+	//if (normal.dot(circle_origin) <= 0)
+	//	return 0.0;
 
-	vector_3 min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
-	vector_3 max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
+	//vector_3 min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
+	//vector_3 max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
 
 	real_type tmin = 0, tmax = 0;
 
-	return intersect_AABB(min_location, max_location, location, normal, tmin, tmax);
+	real_type centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, tmin, tmax);
+
+	return centre;
+
+	//vector_3 up_min_location = min_location;
+	//up_min_location.y += 2.0 * receiver_radius;
+
+	//vector_3 up_max_location = max_location;
+	//up_max_location.y += 2.0 * receiver_radius;
+
+	//vector_3 down_min_location = min_location;
+	//down_min_location.y -= 2.0 * receiver_radius;
+
+	//vector_3 down_max_location = max_location;
+	//down_max_location.y -= 2.0 * receiver_radius;
+
+	//vector_3 left_min_location = min_location;
+	//left_min_location.x += 2.0 * receiver_radius;
+
+	//vector_3 left_max_location = max_location;
+	//left_max_location.x += 2.0 * receiver_radius;
+
+	//vector_3 right_min_location = min_location;
+	//right_min_location.x -= 2.0 * receiver_radius;
+
+	//vector_3 right_max_location = max_location;
+	//right_max_location.x -= 2.0 * receiver_radius;
+
+	//vector_3 forward_min_location = min_location;
+	//forward_min_location.z += 2.0 * receiver_radius;
+
+	//vector_3 forward_max_location = max_location;
+	//forward_max_location.z += 2.0 * receiver_radius;
+
+	//vector_3 back_min_location = min_location;
+	//back_min_location.z -= 2.0 * receiver_radius;
+
+	//vector_3 back_max_location = max_location;
+	//back_max_location.z -= 2.0 * receiver_radius;
+
+	//real_type up = intersect_AABB(up_min_location, up_max_location, location, normal, tmin, tmax);
+	//real_type down = intersect_AABB(down_min_location, down_max_location, location, normal, tmin, tmax);
+
+	//real_type left = intersect_AABB(left_min_location, left_max_location, location, normal, tmin, tmax);
+	//real_type right = intersect_AABB(right_min_location, right_max_location, location, normal, tmin, tmax);
+
+	//real_type forward = intersect_AABB(forward_min_location, forward_max_location, location, normal, tmin, tmax);
+	//real_type back = intersect_AABB(back_min_location, back_max_location, location, normal, tmin, tmax);
+
+	//return (forward + center + back) / 3.0;
 }
 
 // Thread-local versions of random functions that take generator and distribution as parameters
@@ -164,15 +213,32 @@ void worker_thread(
 		r.z *= emitter_radius;
 
 		vector_3 normal = (location - r).normalize();
+		
+		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
+		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
+		
+		vector_3 right_min_location = aabb_min_location;
+		right_min_location.x += receiver_radius;
 
+		vector_3 right_max_location = aabb_max_location;
+		right_max_location.x += receiver_radius;
+
+		vector_3 left_min_location = aabb_min_location;
+		left_min_location.x -= receiver_radius;
+
+		vector_3 left_max_location = aabb_max_location;
+		left_max_location.x -= receiver_radius;
 
 		local_count += intersect(
 			location, normal,
-			receiver_distance, receiver_radius);
+			aabb_min_location, aabb_max_location);
 
 		local_count_plus += intersect(
 			location, normal,
-			receiver_distance_plus, receiver_radius);
+			right_min_location, right_max_location);
+
+
+
 
 		// Update global progress periodically
 		local_progress++;
@@ -311,7 +377,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e9 * log(2.0) / pi);
+		sqrt(1e10 * log(2.0) / pi);
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
