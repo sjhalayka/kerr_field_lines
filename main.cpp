@@ -263,12 +263,12 @@ real_type get_intersecting_line_density(
 		long long unsigned int thread_end = current_start + thread_iterations;
 
 		// Each thread gets a different seed based on thread index
-		unsigned int thread_seed = t;
+		unsigned int thread_seed = t + static_cast<unsigned>(time(0));
 
 		threads.emplace_back(
 			worker_thread,
 			current_start,
-			thread_end,
+			thread_end,	
 			thread_seed,
 			emitter_radius,
 			receiver_distance,
