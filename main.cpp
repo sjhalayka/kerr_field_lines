@@ -8,7 +8,24 @@
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, real_type& tmin, real_type& tmax)
+//real_type dt = 0.01;
+
+
+
+
+bool intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3& point)
+{
+	if (min_location.x <= point.x && max_location.x >= point.x &&
+		min_location.y <= point.y && max_location.y >= point.y &&
+		min_location.z <= point.z && max_location.z >= point.z)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, const vector_3 sideways, real_type& tmin, real_type& tmax)
 {
 	tmin = (min_location.x - ray_origin.x) / ray_dir.x;
 	tmax = (max_location.x - ray_origin.x) / ray_dir.x;
@@ -67,6 +84,7 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 real_type intersect(
 	const vector_3 location,
 	const vector_3 normal,
+	const vector_3 sideways,
 	const vector_3 aabb_min_location,
 	const vector_3 aabb_max_location)
 {
@@ -80,7 +98,7 @@ real_type intersect(
 
 	real_type tmin = 0, tmax = 0;
 
-	real_type centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, tmin, tmax);
+	real_type centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax);
 
 	return centre;
 
@@ -134,7 +152,8 @@ real_type intersect(
 
 // Thread-local versions of random functions that take generator and distribution as parameters
 vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
-	std::mt19937& local_gen, std::uniform_real_distribution<real_type>& local_dis)
+	std::mt19937& local_gen,
+	std::uniform_real_distribution<real_type>& local_dis)
 {
 	vector_3 r = vector_3(local_dis(local_gen), local_dis(local_gen), 0.0);
 	vector_3 uu = normal.cross(vector_3(0.0, 1.0, 1.0)).normalize();
@@ -144,12 +163,13 @@ vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
 	double rx = ra * cos(2.0 * pi * r.x);
 	double ry = ra * sin(2.0 * pi * r.x);
 	double rz = sqrt(1.0 - r.y);
-	vector_3 rr = vector_3(uu*rx + vv*ry + normal*rz);
+	vector_3 rr = vector_3(uu * rx + vv * ry + normal * rz);
 
 	return rr.normalize();
 }
 
-vector_3 random_unit_vector(std::mt19937& local_gen, std::uniform_real_distribution<real_type>& local_dis)
+vector_3 random_unit_vector(std::mt19937& local_gen,
+	std::uniform_real_distribution<real_type>& local_dis)
 {
 	const real_type z = local_dis(local_gen) * 2.0 - 1.0;
 	const real_type a = local_dis(local_gen) * 2.0 * pi;
@@ -160,6 +180,20 @@ vector_3 random_unit_vector(std::mt19937& local_gen, std::uniform_real_distribut
 
 	return vector_3(x, y, z).normalize();
 }
+
+
+vector_3 cartesianToSpherical(real_type x, real_type y, real_type z)
+{
+	vector_3 s;
+	s.z = std::sqrt(x * x + y * y + z * z); // distance (radius) - calculate first!
+	s.x = std::acos(z / s.z);          // polar angle (theta/colatitude)
+	s.y = std::atan2(y, x);              // azimuthal angle (phi)
+
+	return s;
+}
+
+
+
 
 // Worker function for each thread
 void worker_thread(
@@ -185,17 +219,13 @@ void worker_thread(
 	const long long unsigned int progress_update_interval = 10000;
 	long long unsigned int local_progress = 0;
 
+
+
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
-		vector_3 location = random_unit_vector(local_gen, local_dis);
-
-		location.x *= emitter_radius;
-		location.y *= emitter_radius;
-		location.z *= emitter_radius;
-
+		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
 		vector_3 surface_normal = location;
 		surface_normal.normalize();
-
 
 		// A) Newtonian gravitation
 		//vector_3 normal =
@@ -207,17 +237,24 @@ void worker_thread(
 		//		surface_normal, local_gen, local_dis);
 
 		// C) Schwarzschild gravitation, quantum
-		vector_3 r = random_unit_vector(local_gen, local_dis);
-
-		r.x *= emitter_radius;
-		r.y *= emitter_radius;
-		r.z *= emitter_radius;
+		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
 
 		vector_3 normal = (location - r).normalize();
-		
+
+		vector_3 up(0, 1, 0);
+
+		vector_3 sideways = normal.cross(up);
+		vector_3 spherical = cartesianToSpherical(normal.x, normal.y, normal.z);
+
+		real_type spin_rate = 0.9;
+
+		real_type sideways_length = spin_rate * sin(spherical.x) / (1 + sqrt(1 - spin_rate * spin_rate));
+		sideways.normalize();
+		sideways *= sideways_length;
+
 		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
 		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
-		
+
 		vector_3 right_min_location = aabb_min_location;
 		right_min_location.x += epsilon;
 
@@ -231,11 +268,11 @@ void worker_thread(
 		left_max_location.x -= epsilon;
 
 		local_count += intersect(
-			location, normal,
+			location, normal, sideways,
 			aabb_min_location, aabb_max_location);
 
 		local_count_plus += intersect(
-			location, normal,
+			location, normal, sideways,
 			right_min_location, right_max_location);
 
 
@@ -303,10 +340,8 @@ real_type get_intersecting_line_density(
 
 	// Get number of hardware threads
 	unsigned int num_threads = std::thread::hardware_concurrency();
-	if (num_threads == 0) num_threads = 4; // Fallback if detection fails
-
 	cout << "Using " << num_threads << " threads for " << n << " iterations" << endl;
-
+	 
 	std::vector<std::thread> threads;
 	std::vector<real_type> thread_counts(num_threads, 0);
 	std::vector<real_type> thread_counts_plus(num_threads, 0);
@@ -336,7 +371,7 @@ real_type get_intersecting_line_density(
 		threads.emplace_back(
 			worker_thread,
 			current_start,
-			thread_end,	
+			thread_end,
 			thread_seed,
 			emitter_radius,
 			receiver_distance,
@@ -380,7 +415,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e10 * log(2.0) / pi);
+		sqrt(1e9 * log(2.0) / pi);
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
