@@ -90,7 +90,7 @@ public:
 	void rotate_x(const real_type& radians);
 	void rotate_y(const real_type& radians);
 	void rotate_z(const real_type& radians);
-	vector_3 operator+(const vector_3& rhs);
+	vector_3 operator+(const vector_3& rhs) const;
 	vector_3 operator-(const vector_3& rhs) const;
 	vector_3 operator*(const vector_3& rhs);
 	vector_3 operator/(const vector_3& rhs);

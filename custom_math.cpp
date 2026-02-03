@@ -54,7 +54,7 @@ void custom_math::vector_3::rotate_z(const real_type& radians)
 	y = t_x * sin(radians) + y * cos(radians);
 }
 
-custom_math::vector_3 custom_math::vector_3::operator+(const vector_3& rhs)
+custom_math::vector_3 custom_math::vector_3::operator+(const vector_3& rhs) const
 {
 	return vector_3(x + rhs.x, y + rhs.y, z + rhs.z);
 }
