@@ -227,22 +227,10 @@ void worker_thread(
 		vector_3 surface_normal = location;
 		surface_normal.normalize();
 
-		// A) Newtonian gravitation
-		//vector_3 normal =
-		//	surface_normal;
-
-		// B) Schwarzschild gravitation, classical
-		//vector_3 normal = 
-		//	random_cosine_weighted_hemisphere(
-		//		surface_normal, local_gen, local_dis);
-
-		// C) Schwarzschild gravitation, quantum
 		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
-
 		vector_3 normal = (location - r).normalize();
 
 		vector_3 up(0, 1, 0);
-
 		vector_3 sideways = normal.cross(up);
 		vector_3 spherical = cartesianToSpherical(normal.x, normal.y, normal.z);
 
@@ -274,9 +262,6 @@ void worker_thread(
 		local_count_plus += intersect(
 			location, normal, sideways,
 			right_min_location, right_max_location);
-
-
-
 
 		// Update global progress periodically
 		local_progress++;
