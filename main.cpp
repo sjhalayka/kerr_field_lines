@@ -390,8 +390,6 @@ int main(int argc, char** argv)
 	const real_type emitter_inner_radius_geometrized =
 		sqrt(1e9 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
 
-
-
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
@@ -400,15 +398,14 @@ int main(int argc, char** argv)
 		+ emitter_inner_radius_geometrized) 
 		/ 2.0;
 
-	const real_type emitter_area_geometrized = 
-		8.0 * pi * emitter_mass_geometrized
-		* emitter_radius_geometrized;
+	const real_type emitter_area_geometrized =
+		8.0 * pi * emitter_mass_geometrized * emitter_mass_geometrized
+		* (1 + sqrt(1 - a_star * a_star));
 
 	// Field line count
 	const real_type n_geometrized =
 		emitter_area_geometrized
 		/ (log(2.0) * 4.0);
-
 
 	real_type start_pos =
 		emitter_radius_geometrized
@@ -479,7 +476,7 @@ int main(int argc, char** argv)
 
 		const real_type b =
 			receiver_distance_geometrized * receiver_distance_geometrized
-			+ a * a * pow(cos(pi - 0.0001), 2.0);
+			+ a * a * pow(cos(pi / 2.0), 2.0);
 
 		const real_type dt_Kerr = sqrt(1 - emitter_radius_geometrized * receiver_distance_geometrized / b);
 
