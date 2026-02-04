@@ -7,7 +7,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-real_type a_star = 0;
+real_type a_star = 0.9;
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, const vector_3 sideways, real_type& tmin, real_type& tmax)
 {
@@ -390,6 +390,8 @@ int main(int argc, char** argv)
 	const real_type emitter_inner_radius_geometrized =
 		sqrt(1e9 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
 
+
+
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
@@ -470,14 +472,14 @@ int main(int argc, char** argv)
 			/ (8.0 * emitter_mass_geometrized);
 
 
-		const real_type dt_Schwarzschild = sqrt(1 - 2*emitter_mass_geometrized / receiver_distance_geometrized);
+		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized / receiver_distance_geometrized);
 
 
 		real_type a = a_star * emitter_mass_geometrized;
 
 		const real_type b =
 			receiver_distance_geometrized * receiver_distance_geometrized
-			+ a * a * pow(cos(pi/2.0), 2.0);
+			+ a * a * pow(cos(pi - 0.0001), 2.0);
 
 		const real_type dt_Kerr = sqrt(1 - emitter_radius_geometrized * receiver_distance_geometrized / b);
 
@@ -486,13 +488,12 @@ int main(int argc, char** argv)
 
 
 		const real_type a_Schwarzschild_geometrized =
-			2.0* emitter_mass_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+			emitter_radius_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
 
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
 		cout << a_Kerr_geometrized / a_Schwarzschild_geometrized << endl;
-
 		exit(0);
 
 
