@@ -7,23 +7,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-
-//real_type dt = 0.01;
-
-
-
-
-//bool intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3& point)
-//{
-//	if (min_location.x <= point.x && max_location.x >= point.x &&
-//		min_location.y <= point.y && max_location.y >= point.y &&
-//		min_location.z <= point.z && max_location.z >= point.z)
-//	{
-//		return true;
-//	}
-//
-//	return false;
-//}
+real_type a_star = 0;
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, const vector_3 sideways, real_type& tmin, real_type& tmax)
 {
@@ -88,10 +72,10 @@ real_type intersect(
 	const vector_3 aabb_min_location,
 	const vector_3 aabb_max_location)
 {
-	//const vector_3 circle_origin(receiver_distance, 0, 0);
+	const vector_3 x((aabb_min_location.x + aabb_max_location.x) * 0.5, 0, 0);
 
-	//if (normal.dot(circle_origin) <= 0)
-	//	return 0.0;
+	if (normal.dot(x) <= 0)
+		return 0.0;
 
 	//vector_3 min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
 	//vector_3 max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
@@ -234,9 +218,9 @@ void worker_thread(
 		vector_3 sideways = normal.cross(up);
 		vector_3 spherical = cartesianToSpherical(normal.x, normal.y, normal.z);
 
-		real_type spin_rate = 0.9;
 
-		real_type sideways_length = spin_rate * sin(spherical.x) / (1 + sqrt(1 - spin_rate * spin_rate));
+
+		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
 		sideways.normalize();
 		sideways *= sideways_length;
 
@@ -398,16 +382,24 @@ int main(int argc, char** argv)
 	ofstream outfile_numerical("Schwarzschild_numerical");
 	ofstream outfile_analytical("Schwarzschild_analytical");
 	ofstream outfile_Newton("Newton_analytical");
+	
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e9 * log(2.0) / pi);
+		sqrt(1e9 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
+
+	const real_type emitter_inner_radius_geometrized =
+		sqrt(1e9 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
-	const real_type emitter_area_geometrized =
-		4.0 * pi
-		* emitter_radius_geometrized
+	const real_type emitter_mass_geometrized = 
+		(emitter_radius_geometrized 
+		+ emitter_inner_radius_geometrized) 
+		/ 2.0;
+
+	const real_type emitter_area_geometrized = 
+		8.0 * pi * emitter_mass_geometrized
 		* emitter_radius_geometrized;
 
 	// Field line count
@@ -415,9 +407,6 @@ int main(int argc, char** argv)
 		emitter_area_geometrized
 		/ (log(2.0) * 4.0);
 
-	const real_type emitter_mass_geometrized =
-		emitter_radius_geometrized
-		/ 2.0;
 
 	real_type start_pos =
 		emitter_radius_geometrized
@@ -481,10 +470,32 @@ int main(int argc, char** argv)
 			/ (8.0 * emitter_mass_geometrized);
 
 
-		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized / receiver_distance_geometrized);
+		const real_type dt_Schwarzschild = sqrt(1 - 2*emitter_mass_geometrized / receiver_distance_geometrized);
+
+
+		real_type a = a_star * emitter_mass_geometrized;
+
+		const real_type b =
+			receiver_distance_geometrized * receiver_distance_geometrized
+			+ a * a * pow(cos(pi/2.0), 2.0);
+
+		const real_type dt_Kerr = sqrt(1 - emitter_radius_geometrized * receiver_distance_geometrized / b);
+
+
+
+
 
 		const real_type a_Schwarzschild_geometrized =
-			emitter_radius_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+			2.0* emitter_mass_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+
+		const real_type a_Kerr_geometrized =
+			emitter_radius_geometrized / (pi * b * dt_Kerr);
+
+		cout << a_Kerr_geometrized / a_Schwarzschild_geometrized << endl;
+
+		exit(0);
+
+
 
 		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
