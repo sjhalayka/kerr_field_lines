@@ -466,13 +466,13 @@ int main(int argc, char** argv)
 
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e10 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
+		sqrt(1e9 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
 
 	const real_type emitter_radius_geometrized_Schwarzschild =
-		sqrt(1e10 * log(2.0) / pi);
+		sqrt(1e9 * log(2.0) / pi);
 
 	const real_type emitter_inner_radius_geometrized =
-		sqrt(1e10 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
+		sqrt(1e9 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
@@ -487,9 +487,15 @@ int main(int argc, char** argv)
 		* (1 + sqrt(1 - a_star * a_star));
 
 	// Field line count
+	//const real_type n_geometrized =
+	//	emitter_area_geometrized
+	//	/ (log(2.0) * 4.0);
+
 	const real_type n_geometrized =
-		emitter_area_geometrized
-		/ (log(2.0) * 4.0);
+		emitter_radius_geometrized * emitter_radius_geometrized * 2.0 * pi
+		/ (log(2.0) * (1 + sqrt(1 - a_star)));
+
+
 
 	real_type start_pos =
 		emitter_radius_geometrized
