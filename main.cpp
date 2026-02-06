@@ -4,24 +4,77 @@
 #include <atomic>
 #include <chrono>
 #include <iomanip>
+#include <algorithm>
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-real_type a_star = 0.9;
+const real_type a_star = 0.75;
+
+
+vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
+{
+	if (t <= 0.0) return s0;
+	if (t >= 1.0) return s1;
+
+	vector_3 s0_norm = s0;
+	s0_norm.normalize();
+
+	vector_3 s1_norm = s1;
+	s1_norm.normalize();
+
+	real_type cos_angle = s0_norm.dot(s1_norm);
+	cos_angle = std::clamp(cos_angle, static_cast<real_type>(-1.0), static_cast<real_type>(1.0));
+	const real_type angle = acos(cos_angle);
+
+	// Nearly identical vectors — just return s0
+	if (angle < 1e-12)
+		return s0;
+
+	const real_type p0_factor = sin((1 - t) * angle) / sin(angle);
+	const real_type p1_factor = sin(t * angle) / sin(angle);
+
+	return s0 * p0_factor + s1 * p1_factor;
+}
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, const vector_3 sideways, real_type& tmin, real_type& tmax)
 {
-	tmin = (min_location.x - ray_origin.x) / ray_dir.x;
-	tmax = (max_location.x - ray_origin.x) / ray_dir.x;
+	// --- X axis ---
+	if (fabs(ray_dir.x) < 1e-12)
+	{
+		// Ray is parallel to X slabs
+		if (ray_origin.x < min_location.x || ray_origin.x > max_location.x)
+			return 0;
+		tmin = -1e30;
+		tmax = 1e30;
+	}
+	else
+	{
+		tmin = (min_location.x - ray_origin.x) / ray_dir.x;
+		tmax = (max_location.x - ray_origin.x) / ray_dir.x;
 
-	if (tmin > tmax)
-		swap(tmin, tmax);
+		if (tmin > tmax)
+			swap(tmin, tmax);
+	}
 
-	real_type tymin = (min_location.y - ray_origin.y) / ray_dir.y;
-	real_type tymax = (max_location.y - ray_origin.y) / ray_dir.y;
+	// --- Y axis ---
+	real_type tymin, tymax;
 
-	if (tymin > tymax)
-		swap(tymin, tymax);
+	if (fabs(ray_dir.y) < 1e-12)
+	{
+		// Ray is parallel to Y slabs
+		if (ray_origin.y < min_location.y || ray_origin.y > max_location.y)
+			return 0;
+		tymin = -1e30;
+		tymax = 1e30;
+	}
+	else
+	{
+		tymin = (min_location.y - ray_origin.y) / ray_dir.y;
+		tymax = (max_location.y - ray_origin.y) / ray_dir.y;
+
+		if (tymin > tymax)
+			swap(tymin, tymax);
+	}
 
 	if ((tmin > tymax) || (tymin > tmax))
 		return 0;
@@ -32,11 +85,25 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 	if (tymax < tmax)
 		tmax = tymax;
 
-	real_type tzmin = (min_location.z - ray_origin.z) / ray_dir.z;
-	real_type tzmax = (max_location.z - ray_origin.z) / ray_dir.z;
+	// --- Z axis ---
+	real_type tzmin, tzmax;
 
-	if (tzmin > tzmax)
-		swap(tzmin, tzmax);
+	if (fabs(ray_dir.z) < 1e-12)
+	{
+		// Ray is parallel to Z slabs
+		if (ray_origin.z < min_location.z || ray_origin.z > max_location.z)
+			return 0;
+		tzmin = -1e30;
+		tzmax = 1e30;
+	}
+	else
+	{
+		tzmin = (min_location.z - ray_origin.z) / ray_dir.z;
+		tzmax = (max_location.z - ray_origin.z) / ray_dir.z;
+
+		if (tzmin > tzmax)
+			swap(tzmin, tzmax);
+	}
 
 	if ((tmin > tzmax) || (tzmin > tmax))
 		return 0;
@@ -82,7 +149,9 @@ real_type intersect(
 
 	real_type tmin = 0, tmax = 0;
 
-	real_type centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax);
+	real_type centre = 0;
+
+	centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax);
 
 	return centre;
 
@@ -166,12 +235,12 @@ vector_3 random_unit_vector(std::mt19937& local_gen,
 }
 
 
-vector_3 cartesianToSpherical(real_type x, real_type y, real_type z)
+vector_3 cartesianToSpherical(vector_3 input)
 {
 	vector_3 s;
-	s.z = std::sqrt(x * x + y * y + z * z); // distance (radius) - calculate first!
-	s.x = std::acos(z / s.z);          // polar angle (theta/colatitude)
-	s.y = std::atan2(y, x);              // azimuthal angle (phi)
+	s.z = std::sqrt(input.x * input.x + input.y * input.y + input.z * input.z); // distance (radius) - calculate first!
+	s.x = std::acos(input.z / s.z);          // polar angle (theta/colatitude)
+	s.y = std::atan2(input.y, input.x);              // azimuthal angle (phi)
 
 	return s;
 }
@@ -208,17 +277,29 @@ void worker_thread(
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
 		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
-		vector_3 surface_normal = location;
-		surface_normal.normalize();
-
 		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
 		vector_3 normal = (location - r).normalize();
 
+		vector_3 p_disk = normal;
+		p_disk.y = 0;
+
+		// Guard against near-zero p_disk (happens when normal is near-vertical)
+		real_type p_disk_len = sqrt(p_disk.x * p_disk.x + p_disk.y * p_disk.y + p_disk.z * p_disk.z);
+
+		if (p_disk_len < 1e-12)
+		{
+			// normal is nearly vertical, skip slerp — use normal as-is
+			// (p_disk is degenerate, slerp would produce NaN)
+		}
+		else
+		{
+			p_disk.normalize();
+			normal = slerp(normal, p_disk, a_star);
+		}
+
 		vector_3 up(0, 1, 0);
 		vector_3 sideways = normal.cross(up);
-		vector_3 spherical = cartesianToSpherical(normal.x, normal.y, normal.z);
-
-
+		vector_3 spherical = cartesianToSpherical(normal);
 
 		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
 		sideways.normalize();
@@ -335,7 +416,7 @@ real_type get_intersecting_line_density(
 		long long unsigned int thread_end = current_start + thread_iterations;
 
 		// Each thread gets a different seed based on thread index
-		unsigned int thread_seed = t + static_cast<unsigned>(time(0));
+		unsigned int thread_seed = t;// +static_cast<unsigned>(time(0));
 
 		threads.emplace_back(
 			worker_thread,
@@ -382,20 +463,23 @@ int main(int argc, char** argv)
 	ofstream outfile_numerical("Schwarzschild_numerical");
 	ofstream outfile_analytical("Schwarzschild_analytical");
 	ofstream outfile_Newton("Newton_analytical");
-	
+
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e9 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
+		sqrt(1e10 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
+
+	const real_type emitter_radius_geometrized_Schwarzschild =
+		sqrt(1e10 * log(2.0) / pi);
 
 	const real_type emitter_inner_radius_geometrized =
-		sqrt(1e9 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
+		sqrt(1e10 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
-	const real_type emitter_mass_geometrized = 
-		(emitter_radius_geometrized 
-		+ emitter_inner_radius_geometrized) 
+	const real_type emitter_mass_geometrized =
+		(emitter_radius_geometrized
+			+ emitter_inner_radius_geometrized)
 		/ 2.0;
 
 	const real_type emitter_area_geometrized =
@@ -465,12 +549,10 @@ int main(int argc, char** argv)
 			);
 
 		const real_type a_flat_geometrized =
-			gradient_strength * receiver_distance_geometrized * log(2)
+			gradient_strength * receiver_distance_geometrized * log(2) * (1.0 + a_star)
 			/ (8.0 * emitter_mass_geometrized);
 
-
-		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized / receiver_distance_geometrized);
-
+		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized_Schwarzschild / receiver_distance_geometrized);
 
 		real_type a = a_star * emitter_mass_geometrized;
 
@@ -485,24 +567,24 @@ int main(int argc, char** argv)
 
 
 		const real_type a_Schwarzschild_geometrized =
-			emitter_radius_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+			emitter_radius_geometrized_Schwarzschild / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
 
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
-		cout << a_Kerr_geometrized / a_Schwarzschild_geometrized << endl;
-		exit(0);
-
+		//cout << a_Kerr_geometrized << " " << a_Schwarzschild_geometrized << endl;
+		//exit(0);
 
 
 		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
+		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
 		cout << "a_flat_geometrized " << a_flat_geometrized << endl;
-		cout << a_Schwarzschild_geometrized / a_flat_geometrized << endl;
-		cout << endl;
-		cout << a_Newton_geometrized / a_flat_geometrized << endl;
-		cout << endl << endl;
-
+		//cout << a_Schwarzschild_geometrized / a_flat_geometrized << endl;
+		//cout << endl;
+		//cout << a_Newton_geometrized / a_flat_geometrized << endl;
+		//cout << endl << endl;
+		exit(0);
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
 		outfile_analytical << receiver_distance_geometrized << " " << a_Schwarzschild_geometrized << endl;
