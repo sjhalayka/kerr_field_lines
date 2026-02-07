@@ -8,7 +8,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.9;
+const real_type a_star = 0.333;
 
 
 vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
@@ -36,7 +36,7 @@ vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
 	return s0 * p0_factor + s1 * p1_factor;
 }
 
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, const vector_3 sideways, real_type& tmin, real_type& tmax)
+real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius)
 {
 	// --- X axis ---
 	if (fabs(ray_dir.x) < 1e-12)
@@ -129,7 +129,9 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 
 	real_type l = (ray_hit_end - ray_hit_start).length();
 
-	return l;
+	real_type scale = sideways.length() / (2.0 * receiver_radius);
+
+	return l;// sideways.length();// ((ray_hit_end - ray_hit_start) * (sideways.length() / l)).length();
 }
 
 real_type intersect(
@@ -137,7 +139,8 @@ real_type intersect(
 	const vector_3 normal,
 	const vector_3 sideways,
 	const vector_3 aabb_min_location,
-	const vector_3 aabb_max_location)
+	const vector_3 aabb_max_location,
+	const real_type receiver_radius)
 {
 	const vector_3 x((aabb_min_location.x + aabb_max_location.x) * 0.5, 0, 0);
 
@@ -151,7 +154,7 @@ real_type intersect(
 
 	real_type centre = 0;
 
-	centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax);
+	centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius);
 
 	return centre;
 
@@ -322,11 +325,13 @@ void worker_thread(
 
 		local_count += intersect(
 			location, normal, sideways,
-			aabb_min_location, aabb_max_location);
+			aabb_min_location, aabb_max_location,
+			receiver_radius);
 
 		local_count_plus += intersect(
 			location, normal, sideways,
-			right_min_location, right_max_location);
+			right_min_location, right_max_location,
+			receiver_radius);
 
 		// Update global progress periodically
 		local_progress++;
@@ -546,49 +551,23 @@ int main(int argc, char** argv)
 			gradient_strength * receiver_distance_geometrized * log(2)// * (1.0 + a_star)
 			/ (8.0 * emitter_mass_geometrized);
 
-	//	const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized_Schwarzschild / receiver_distance_geometrized);
-
-		real_type a = a_star * emitter_mass_geometrized;
-
+		const real_type a = a_star * emitter_mass_geometrized;
 		const real_type b =
 			receiver_distance_geometrized * receiver_distance_geometrized
 			+ a * a * pow(cos(pi / 2.0), 2.0);
 
 		const real_type dt_Kerr = sqrt(1 - emitter_radius_geometrized * receiver_distance_geometrized / b);
-
-
-
-
-
-		//const real_type a_Schwarzschild_geometrized =
-		//	emitter_radius_geometrized_Schwarzschild / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
-
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
-		//cout << a_Kerr_geometrized << " " << a_Schwarzschild_geometrized << endl;
-		//exit(0);
-
-
-//		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
 		cout << "a_flat_geometrized " << a_flat_geometrized << endl;
 		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
-		//cout << endl;
-		//cout << a_Newton_geometrized / a_flat_geometrized << endl;
-		//cout << endl << endl;
-		//exit(0);
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
 		outfile_analytical << receiver_distance_geometrized << " " << a_Kerr_geometrized << endl;
 		outfile_Newton << receiver_distance_geometrized << " " << a_Newton_geometrized << endl;
-
-
-		//outfile << receiver_distance_geometrized <<
-		//	" " <<
-		//	(a_Schwarzschild_geometrized / a_flat_geometrized) <<
-		//	endl;
 	}
 
 }
