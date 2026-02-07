@@ -293,8 +293,8 @@ void worker_thread(
 		}
 		else
 		{
-			p_disk.normalize();
-			normal = slerp(normal, p_disk, a_star);
+			//p_disk.normalize();
+			//normal = slerp(normal, p_disk, a_star);
 		}
 
 		vector_3 up(0, 1, 0);
@@ -416,7 +416,7 @@ real_type get_intersecting_line_density(
 		long long unsigned int thread_end = current_start + thread_iterations;
 
 		// Each thread gets a different seed based on thread index
-		unsigned int thread_seed = t;// +static_cast<unsigned>(time(0));
+		unsigned int thread_seed = t + static_cast<unsigned>(time(0));
 
 		threads.emplace_back(
 			worker_thread,
@@ -460,36 +460,28 @@ real_type get_intersecting_line_density(
 
 int main(int argc, char** argv)
 {
-	ofstream outfile_numerical("Schwarzschild_numerical");
-	ofstream outfile_analytical("Schwarzschild_analytical");
+	ofstream outfile_numerical("Kerr_numerical");
+	ofstream outfile_analytical("Kerr_analytical");
 	ofstream outfile_Newton("Newton_analytical");
 
+	// Field line count
+	const real_type n = 1e10;
+
+	const real_type emitter_mass_geometrized =
+		sqrt((n * log(2.0))/(2 * pi * (1 + sqrt(1 - a_star*a_star))));
 
 	const real_type emitter_radius_geometrized =
-		sqrt(1e10 * log(2.0) * (1 + sqrt(1 - a_star)) / (2.0 * pi));
-
-	const real_type emitter_radius_geometrized_Schwarzschild =
-		sqrt(1e10 * log(2.0) / pi);
-
-	const real_type emitter_inner_radius_geometrized =
-		sqrt(1e10 * log(2.0) / (2.0 * pi)) * (1 - sqrt(1 - a_star * a_star)) / sqrt(1 + sqrt(1 - a_star * a_star));
+		emitter_mass_geometrized * (1 + sqrt(1 - a_star*a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
-	const real_type emitter_mass_geometrized =
-		(emitter_radius_geometrized
-			+ emitter_inner_radius_geometrized)
-		/ 2.0;
-
 	const real_type emitter_area_geometrized =
-		8.0 * pi * emitter_mass_geometrized * emitter_mass_geometrized
-		* (1 + sqrt(1 - a_star * a_star));
+		4 * pi 
+		* (emitter_radius_geometrized * emitter_radius_geometrized 
+			+ a_star * a_star 
+				* emitter_mass_geometrized * emitter_mass_geometrized);
 
-	// Field line count
-	const real_type n_geometrized =
-		emitter_radius_geometrized * emitter_radius_geometrized * 2.0 * pi
-		/ (log(2.0) * (1 + sqrt(1 - a_star)));
 
 
 
@@ -499,7 +491,7 @@ int main(int argc, char** argv)
 
 	real_type end_pos = start_pos * 10.0;
 
-	const size_t pos_res = 5; // Minimum 2 steps
+	const size_t pos_res = 20; // Minimum 2 steps
 
 	const real_type pos_step_size =
 		(end_pos - start_pos)
@@ -522,7 +514,7 @@ int main(int argc, char** argv)
 		// beta function
 		const real_type collision_count_plus_minus_collision_count =
 			get_intersecting_line_density(
-				static_cast<long long unsigned int>(n_geometrized),
+				static_cast<long long unsigned int>(n),
 				emitter_radius_geometrized,
 				receiver_distance_geometrized,
 				receiver_distance_plus_geometrized,
@@ -544,17 +536,17 @@ int main(int argc, char** argv)
 
 		const real_type a_Newton_geometrized =
 			sqrt(
-				n_geometrized * log(2.0)
+				n * log(2.0)
 				/
 				(4.0 * pi *
 					pow(receiver_distance_geometrized, 4.0))
 			);
 
 		const real_type a_flat_geometrized =
-			gradient_strength * receiver_distance_geometrized * log(2) * (1.0 + a_star)
+			gradient_strength * receiver_distance_geometrized * log(2)// * (1.0 + a_star)
 			/ (8.0 * emitter_mass_geometrized);
 
-		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized_Schwarzschild / receiver_distance_geometrized);
+	//	const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized_Schwarzschild / receiver_distance_geometrized);
 
 		real_type a = a_star * emitter_mass_geometrized;
 
@@ -568,8 +560,8 @@ int main(int argc, char** argv)
 
 
 
-		const real_type a_Schwarzschild_geometrized =
-			emitter_radius_geometrized_Schwarzschild / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+		//const real_type a_Schwarzschild_geometrized =
+		//	emitter_radius_geometrized_Schwarzschild / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
 
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
@@ -578,18 +570,18 @@ int main(int argc, char** argv)
 		//exit(0);
 
 
-		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
+//		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
 		cout << "a_flat_geometrized " << a_flat_geometrized << endl;
-		//cout << a_Schwarzschild_geometrized / a_flat_geometrized << endl;
+		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
 		//cout << endl;
 		//cout << a_Newton_geometrized / a_flat_geometrized << endl;
 		//cout << endl << endl;
-		exit(0);
+		//exit(0);
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
-		outfile_analytical << receiver_distance_geometrized << " " << a_Schwarzschild_geometrized << endl;
+		outfile_analytical << receiver_distance_geometrized << " " << a_Kerr_geometrized << endl;
 		outfile_Newton << receiver_distance_geometrized << " " << a_Newton_geometrized << endl;
 
 
