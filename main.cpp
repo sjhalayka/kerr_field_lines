@@ -8,7 +8,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.333;
+const real_type a_star = 0.9;
 
 
 vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
@@ -129,9 +129,9 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 
 	real_type l = (ray_hit_end - ray_hit_start).length();
 
-	real_type scale = sideways.length() / (2.0 * receiver_radius);
+	//cout << "l " << l << " sideways.length " << sideways.length() << endl;
 
-	return l;// sideways.length();// ((ray_hit_end - ray_hit_start) * (sideways.length() / l)).length();
+	return (l);// -l * sideways.length());// ((ray_hit_end - ray_hit_start) * (sideways.length() / l)).length();
 }
 
 real_type intersect(
@@ -142,21 +142,9 @@ real_type intersect(
 	const vector_3 aabb_max_location,
 	const real_type receiver_radius)
 {
-	const vector_3 x((aabb_min_location.x + aabb_max_location.x) * 0.5, 0, 0);
-
-	if (normal.dot(x) <= 0)
-		return 0.0;
-
-	//vector_3 min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
-	//vector_3 max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
-
 	real_type tmin = 0, tmax = 0;
 
-	real_type centre = 0;
-
-	centre = intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius);
-
-	return centre;
+	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius);
 
 	//vector_3 up_min_location = min_location;
 	//up_min_location.y += 2.0 * receiver_radius;
@@ -275,63 +263,79 @@ void worker_thread(
 	const long long unsigned int progress_update_interval = 10000;
 	long long unsigned int local_progress = 0;
 
-
+	const vector_3 up(0, 1, 0);
 
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
 		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
 		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
-		vector_3 normal = (location - r).normalize();
 
-		vector_3 p_disk = normal;
-		p_disk.y = 0;
+		const vector_3 pre_rotation_normal = (location - r).normalize();
 
-		// Guard against near-zero p_disk (happens when normal is near-vertical)
-		real_type p_disk_len = sqrt(p_disk.x * p_disk.x + p_disk.y * p_disk.y + p_disk.z * p_disk.z);
+		//location.rotate_z(-pi / 4.0);
+		//r.rotate_z(-pi / 4.0);
 
-		if (p_disk_len < 1e-12)
-		{
-			// normal is nearly vertical, skip slerp — use normal as-is
-			// (p_disk is degenerate, slerp would produce NaN)
-		}
-		else
-		{
-			//p_disk.normalize();
-			//normal = slerp(normal, p_disk, a_star);
-		}
+		const vector_3 normal = (location - r).normalize();
+		const vector_3 spherical = cartesianToSpherical(normal);
 
-		vector_3 up(0, 1, 0);
 		vector_3 sideways = normal.cross(up);
-		vector_3 spherical = cartesianToSpherical(normal);
+
 
 		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
-		sideways.normalize();
-		sideways *= sideways_length;
 
-		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
-		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
 
-		vector_3 right_min_location = aabb_min_location;
-		right_min_location.x += epsilon;
 
-		vector_3 right_max_location = aabb_max_location;
-		right_max_location.x += epsilon;
+		if (local_dis(local_gen) >  (1 - sideways_length) - a_star) //(a_star * a_star) * abs(pre_rotation_normal.dot(up)))
+		//if (local_dis(local_gen) > abs(pre_rotation_normal.y))
+		{
 
-		vector_3 left_min_location = aabb_min_location;
-		left_min_location.x -= epsilon;
+			//vector_3 p_disk = normal;
+			//p_disk.y = 0;
 
-		vector_3 left_max_location = aabb_max_location;
-		left_max_location.x -= epsilon;
+			//// Guard against near-zero p_disk (happens when normal is near-vertical)
+			//real_type p_disk_len = sqrt(p_disk.x * p_disk.x + p_disk.y * p_disk.y + p_disk.z * p_disk.z);
 
-		local_count += intersect(
-			location, normal, sideways,
-			aabb_min_location, aabb_max_location,
-			receiver_radius);
+			//if (p_disk_len < 1e-12)
+			//{
+			//	// normal is nearly vertical, skip slerp — use normal as-is
+			//	// (p_disk is degenerate, slerp would produce NaN)
+			//}
+			//else
+			//{
+			//	//p_disk.normalize();
+			//	//normal = slerp(normal, p_disk, a_star);
+			//}
 
-		local_count_plus += intersect(
-			location, normal, sideways,
-			right_min_location, right_max_location,
-			receiver_radius);
+			
+
+			sideways.normalize();
+			sideways *= sideways_length;
+
+			vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
+			vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
+
+			vector_3 right_min_location = aabb_min_location;
+			right_min_location.x += epsilon;
+
+			vector_3 right_max_location = aabb_max_location;
+			right_max_location.x += epsilon;
+
+			vector_3 left_min_location = aabb_min_location;
+			left_min_location.x -= epsilon;
+
+			vector_3 left_max_location = aabb_max_location;
+			left_max_location.x -= epsilon;
+
+			local_count += intersect(
+				location, normal, sideways,
+				aabb_min_location, aabb_max_location,
+				receiver_radius);
+
+			local_count_plus += intersect(
+				location, normal, sideways,
+				right_min_location, right_max_location,
+				receiver_radius);
+		}
 
 		// Update global progress periodically
 		local_progress++;
@@ -470,22 +474,22 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
-		sqrt((n * log(2.0))/(2 * pi * (1 + sqrt(1 - a_star*a_star))));
+		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
 
 	const real_type emitter_radius_geometrized =
-		emitter_mass_geometrized * (1 + sqrt(1 - a_star*a_star));
+		emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
 	const real_type emitter_area_geometrized =
-		4 * pi 
-		* (emitter_radius_geometrized * emitter_radius_geometrized 
-			+ a_star * a_star 
-				* emitter_mass_geometrized * emitter_mass_geometrized);
+		4 * pi
+		* (emitter_radius_geometrized * emitter_radius_geometrized
+			+ a_star * a_star
+			* emitter_mass_geometrized * emitter_mass_geometrized);
 
 
 
@@ -547,8 +551,13 @@ int main(int argc, char** argv)
 					pow(receiver_distance_geometrized, 4.0))
 			);
 
+		const real_type dt_Schwarzschild = sqrt(1 - emitter_radius_geometrized / receiver_distance_geometrized);
+
+		const real_type a_Schwarzschild_geometrized =
+			emitter_radius_geometrized / (pi * pow(receiver_distance_geometrized, 2.0) * dt_Schwarzschild);
+
 		const real_type a_flat_geometrized =
-			gradient_strength * receiver_distance_geometrized * log(2)// * (1.0 + a_star)
+			gradient_strength * receiver_distance_geometrized * log(2)
 			/ (8.0 * emitter_mass_geometrized);
 
 		const real_type a = a_star * emitter_mass_geometrized;
@@ -560,6 +569,7 @@ int main(int argc, char** argv)
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
+		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
 		cout << "a_flat_geometrized " << a_flat_geometrized << endl;
