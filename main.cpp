@@ -8,8 +8,9 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.9;
+const real_type a_star = 0.999;
 
+const real_type angle = pi / 32.0;// 16.0;
 
 vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
 {
@@ -245,6 +246,7 @@ void worker_thread(
 	long long unsigned int end_idx,
 	unsigned int thread_seed,
 	const real_type emitter_radius,
+	const real_type emitter_mass,
 	const real_type receiver_distance,
 	const real_type receiver_distance_plus,
 	const real_type receiver_radius,
@@ -270,10 +272,12 @@ void worker_thread(
 		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
 		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
 
-		const vector_3 pre_rotation_normal = (location - r).normalize();
+		const vector_3 pre_rotate_normal = (location - r).normalize();
 
-		//location.rotate_z(-pi / 4.0);
-		//r.rotate_z(-pi / 4.0);
+		location.rotate_z(-pi / 2.0);
+		r.rotate_z(-pi / 2.0);
+		location.rotate_z(angle);
+		r.rotate_z(angle);
 
 		const vector_3 normal = (location - r).normalize();
 		const vector_3 spherical = cartesianToSpherical(normal);
@@ -283,9 +287,13 @@ void worker_thread(
 
 		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
 
+		//cout << receiver_radius << endl;
+		//cout << receiver_distance << endl;
+		//cout << sigma << endl;
+		//cout << endl;
 
 
-		if (local_dis(local_gen) >  (1 - sideways_length) - a_star) //(a_star * a_star) * abs(pre_rotation_normal.dot(up)))
+		if (1)//local_dis(local_gen) > (1 - dt_div_dtau)) //(a_star * a_star) * abs(pre_rotation_normal.dot(up)))
 		//if (local_dis(local_gen) > abs(pre_rotation_normal.y))
 		{
 
@@ -326,15 +334,26 @@ void worker_thread(
 			vector_3 left_max_location = aabb_max_location;
 			left_max_location.x -= epsilon;
 
+
+			const real_type a = a_star * emitter_mass;
+			const real_type b =
+				receiver_distance * receiver_distance
+				+ a * a * pow(cos(angle), 2.0);
+
+			const real_type dt_Kerr = sqrt(1 - emitter_radius * receiver_distance / b);
+			const real_type a_Kerr_geometrized =
+				emitter_radius / (pi * b * dt_Kerr);
+
+
 			local_count += intersect(
 				location, normal, sideways,
 				aabb_min_location, aabb_max_location,
-				receiver_radius);
+				receiver_radius) / (1 + 4 * pi * a_star);// *pow(abs(normal.dot(up)), 1.0 / 2.0));// *(1.0 - dt_Kerr));
 
 			local_count_plus += intersect(
 				location, normal, sideways,
 				right_min_location, right_max_location,
-				receiver_radius);
+				receiver_radius) / (1 + 4 * pi * a_star);// *pow(abs(normal.dot(up)), 1.0 / 2.0));// *(1.0 - dt_Kerr));
 		}
 
 		// Update global progress periodically
@@ -389,6 +408,7 @@ void progress_monitor(long long unsigned int total_iterations, std::atomic<bool>
 real_type get_intersecting_line_density(
 	const long long unsigned int n,
 	const real_type emitter_radius,
+	const real_type emitter_mass,
 	const real_type receiver_distance,
 	const real_type receiver_distance_plus,
 	const real_type receiver_radius,
@@ -433,6 +453,7 @@ real_type get_intersecting_line_density(
 			thread_end,
 			thread_seed,
 			emitter_radius,
+			emitter_mass,
 			receiver_distance,
 			receiver_distance_plus,
 			receiver_radius,
@@ -525,6 +546,7 @@ int main(int argc, char** argv)
 			get_intersecting_line_density(
 				static_cast<long long unsigned int>(n),
 				emitter_radius_geometrized,
+				emitter_mass_geometrized,
 				receiver_distance_geometrized,
 				receiver_distance_plus_geometrized,
 				receiver_radius_geometrized,
@@ -563,7 +585,7 @@ int main(int argc, char** argv)
 		const real_type a = a_star * emitter_mass_geometrized;
 		const real_type b =
 			receiver_distance_geometrized * receiver_distance_geometrized
-			+ a * a * pow(cos(pi / 2.0), 2.0);
+			+ a * a * pow(cos(angle), 2.0);
 
 		const real_type dt_Kerr = sqrt(1 - emitter_radius_geometrized * receiver_distance_geometrized / b);
 		const real_type a_Kerr_geometrized =
