@@ -344,20 +344,19 @@ void worker_thread(
 			const real_type a_Kerr_geometrized =
 				emitter_radius / (pi * b * dt_Kerr);
 
+
 			const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
+				
 
 			local_count += intersect(
 				location, normal, sideways,
 				aabb_min_location, aabb_max_location,
-				receiver_radius) / ((1.0 / (1.0 + fractionality)) * (1 + (1.0 / (2 * fractionality)) + 4 * pi * a_star * cos(angle) * cos(angle)));
+				receiver_radius) / (1 + pi * a_star * cos(angle));//pow(abs(up.dot(normal)), 1.0));
 
 			local_count_plus += intersect(
 				location, normal, sideways,
 				right_min_location, right_max_location,
-				receiver_radius) / ((1.0/(1.0 + fractionality))*(1 + (1.0 /(2 * fractionality)) + 4 * pi * a_star * cos(angle) * cos(angle)));
-		
-			//local_count *= 1.0 + fractionality;
-			//local_count_plus *= 1.0 + fractionality;
+				receiver_radius) / (1 + pi * a_star * cos(angle));
 		}
 
 		// Update global progress periodically
@@ -499,7 +498,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e10;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
