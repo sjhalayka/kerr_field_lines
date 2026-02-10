@@ -294,7 +294,7 @@ void worker_thread(
 
 
 		if (1)//local_dis(local_gen) > (1 - dt_div_dtau)) //(a_star * a_star) * abs(pre_rotation_normal.dot(up)))
-		//if (local_dis(local_gen) > abs(pre_rotation_normal.y))
+			//if (local_dis(local_gen) > abs(pre_rotation_normal.y))
 		{
 
 			//vector_3 p_disk = normal;
@@ -314,7 +314,7 @@ void worker_thread(
 			//	//normal = slerp(normal, p_disk, a_star);
 			//}
 
-			
+
 
 			sideways.normalize();
 			sideways *= sideways_length;
@@ -348,12 +348,12 @@ void worker_thread(
 			local_count += intersect(
 				location, normal, sideways,
 				aabb_min_location, aabb_max_location,
-				receiver_radius) / (1 + 4 * pi * a_star);// *pow(abs(normal.dot(up)), 1.0 / 2.0));// *(1.0 - dt_Kerr));
+				receiver_radius) / (1 + 4 * pi * a_star * cos(angle) * cos(angle));
 
 			local_count_plus += intersect(
 				location, normal, sideways,
 				right_min_location, right_max_location,
-				receiver_radius) / (1 + 4 * pi * a_star);// *pow(abs(normal.dot(up)), 1.0 / 2.0));// *(1.0 - dt_Kerr));
+				receiver_radius) / (1 + 4 * pi * a_star * cos(angle) * cos(angle));
 		}
 
 		// Update global progress periodically
