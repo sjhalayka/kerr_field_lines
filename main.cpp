@@ -8,9 +8,9 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.999;
+const real_type a_star = 0.5;
 
-const real_type angle = pi / 32.0;// 16.0;
+const real_type angle = pi / 4.0;// 16.0;
 
 vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
 {
@@ -344,16 +344,20 @@ void worker_thread(
 			const real_type a_Kerr_geometrized =
 				emitter_radius / (pi * b * dt_Kerr);
 
+			const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
 
 			local_count += intersect(
 				location, normal, sideways,
 				aabb_min_location, aabb_max_location,
-				receiver_radius) / (1 + 4 * pi * a_star * cos(angle) * cos(angle));
+				receiver_radius) / ((1.0 / (1.0 + fractionality)) * (1 + (1.0 / (2 * fractionality)) + 4 * pi * a_star * cos(angle) * cos(angle)));
 
 			local_count_plus += intersect(
 				location, normal, sideways,
 				right_min_location, right_max_location,
-				receiver_radius) / (1 + 4 * pi * a_star * cos(angle) * cos(angle));
+				receiver_radius) / ((1.0/(1.0 + fractionality))*(1 + (1.0 /(2 * fractionality)) + 4 * pi * a_star * cos(angle) * cos(angle)));
+		
+			//local_count *= 1.0 + fractionality;
+			//local_count_plus *= 1.0 + fractionality;
 		}
 
 		// Update global progress periodically
