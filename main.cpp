@@ -169,24 +169,6 @@ real_type intersect(
 	//return (forward + center + back) / 3.0;
 }
 
-// Thread-local versions of random functions that take generator and distribution as parameters
-vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
-	std::mt19937& local_gen,
-	std::uniform_real_distribution<real_type>& local_dis)
-{
-	vector_3 r = vector_3(local_dis(local_gen), local_dis(local_gen), 0.0);
-	vector_3 uu = normal.cross(vector_3(0.0, 1.0, 1.0)).normalize();
-	vector_3 vv = uu.cross(normal);
-
-	double ra = sqrt(r.y);
-	double rx = ra * cos(2.0 * pi * r.x);
-	double ry = ra * sin(2.0 * pi * r.x);
-	double rz = sqrt(1.0 - r.y);
-	vector_3 rr = vector_3(uu * rx + vv * ry + normal * rz);
-
-	return rr.normalize();
-}
-
 vector_3 random_unit_vector(std::mt19937& local_gen,
 	std::uniform_real_distribution<real_type>& local_dis)
 {
@@ -246,8 +228,6 @@ void worker_thread(
 		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
 		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
 
-		const vector_3 pre_rotate_normal = (location - r).normalize();
-
 		location.rotate_z(-pi / 2.0);
 		r.rotate_z(-pi / 2.0);
 		location.rotate_z(angle);
@@ -261,7 +241,6 @@ void worker_thread(
 		sideways.normalize();
 		sideways *= sideways_length;
 
-
 		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
 		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
 
@@ -271,35 +250,14 @@ void worker_thread(
 		vector_3 right_max_location = aabb_max_location;
 		right_max_location.x += epsilon;
 
-		vector_3 left_min_location = aabb_min_location;
-		left_min_location.x -= epsilon;
-
-		vector_3 left_max_location = aabb_max_location;
-		left_max_location.x -= epsilon;
-
-
-		//const real_type a = a_star * emitter_mass;
-		//const real_type b =
-		//	receiver_distance * receiver_distance
-		//	+ a * a * pow(cos(angle), 2.0);
-
-		//const real_type dt_Kerr = sqrt(1 - emitter_radius * receiver_distance / b);
-		//const real_type a_Kerr_geometrized =
-		//	emitter_radius / (pi * b * dt_Kerr);
-
-		//const real_type norm = 4 * pi * a_star * cos(angle) * cos(angle);
-		//const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
-		//const real_type div =  4 * pi * a_star * cos(angle) * cos(angle);
-
-		real_type aa = a_star * emitter_mass;
-		real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
-		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
-		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
-		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
-
-
-
-
+		real_type a = a_star * emitter_mass;
+		real_type b = receiver_distance * receiver_distance 
+			+ a * a * cos(angle) * cos(angle);
+		
+		real_type dt_Kerr = sqrt(1.0 - emitter_radius * receiver_distance / b);
+		real_type dt_Schwarzschild = sqrt(1.0 - emitter_radius / receiver_distance);
+		
+		real_type div = (b * dt_Kerr) / (receiver_distance * receiver_distance * dt_Schwarzschild);
 
 		local_count += intersect(
 			location, normal, sideways,
