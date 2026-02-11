@@ -8,9 +8,9 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.999;
+const real_type a_star = 0.0;
 
-const real_type angle = pi / 4.0;
+const real_type angle = pi / 2.0;
 
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3	eways, real_type& tmin, real_type& tmax, const real_type receiver_radius)
