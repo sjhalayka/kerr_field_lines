@@ -8,36 +8,12 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.5;
+const real_type a_star = 0.999;
 
-const real_type angle = pi / 4.0;// 16.0;
+const real_type angle = pi / 4.0;
 
-vector_3 slerp(vector_3 s0, vector_3 s1, const real_type t)
-{
-	if (t <= 0.0) return s0;
-	if (t >= 1.0) return s1;
 
-	vector_3 s0_norm = s0;
-	s0_norm.normalize();
-
-	vector_3 s1_norm = s1;
-	s1_norm.normalize();
-
-	real_type cos_angle = s0_norm.dot(s1_norm);
-	cos_angle = std::clamp(cos_angle, static_cast<real_type>(-1.0), static_cast<real_type>(1.0));
-	const real_type angle = acos(cos_angle);
-
-	// Nearly identical vectors — just return s0
-	if (angle < 1e-12)
-		return s0;
-
-	const real_type p0_factor = sin((1 - t) * angle) / sin(angle);
-	const real_type p1_factor = sin(t * angle) / sin(angle);
-
-	return s0 * p0_factor + s1 * p1_factor;
-}
-
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius)
+real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3	eways, real_type& tmin, real_type& tmax, const real_type receiver_radius)
 {
 	// --- X axis ---
 	if (fabs(ray_dir.x) < 1e-12)
@@ -130,9 +106,7 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 
 	real_type l = (ray_hit_end - ray_hit_start).length();
 
-	//cout << "l " << l << " sideways.length " << sideways.length() << endl;
-
-	return (l);// -l * sideways.length());// ((ray_hit_end - ray_hit_start) * (sideways.length() / l)).length();
+	return l;
 }
 
 real_type intersect(
@@ -283,81 +257,62 @@ void worker_thread(
 		const vector_3 spherical = cartesianToSpherical(normal);
 
 		vector_3 sideways = normal.cross(up);
-
-
 		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
-
-		//cout << receiver_radius << endl;
-		//cout << receiver_distance << endl;
-		//cout << sigma << endl;
-		//cout << endl;
+		sideways.normalize();
+		sideways *= sideways_length;
 
 
-		if (1)//local_dis(local_gen) > (1 - dt_div_dtau)) //(a_star * a_star) * abs(pre_rotation_normal.dot(up)))
-			//if (local_dis(local_gen) > abs(pre_rotation_normal.y))
-		{
+		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
+		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
 
-			//vector_3 p_disk = normal;
-			//p_disk.y = 0;
+		vector_3 right_min_location = aabb_min_location;
+		right_min_location.x += epsilon;
 
-			//// Guard against near-zero p_disk (happens when normal is near-vertical)
-			//real_type p_disk_len = sqrt(p_disk.x * p_disk.x + p_disk.y * p_disk.y + p_disk.z * p_disk.z);
+		vector_3 right_max_location = aabb_max_location;
+		right_max_location.x += epsilon;
 
-			//if (p_disk_len < 1e-12)
-			//{
-			//	// normal is nearly vertical, skip slerp — use normal as-is
-			//	// (p_disk is degenerate, slerp would produce NaN)
-			//}
-			//else
-			//{
-			//	//p_disk.normalize();
-			//	//normal = slerp(normal, p_disk, a_star);
-			//}
+		vector_3 left_min_location = aabb_min_location;
+		left_min_location.x -= epsilon;
+
+		vector_3 left_max_location = aabb_max_location;
+		left_max_location.x -= epsilon;
 
 
+		//const real_type a = a_star * emitter_mass;
+		//const real_type b =
+		//	receiver_distance * receiver_distance
+		//	+ a * a * pow(cos(angle), 2.0);
 
-			sideways.normalize();
-			sideways *= sideways_length;
+		//const real_type dt_Kerr = sqrt(1 - emitter_radius * receiver_distance / b);
+		//const real_type a_Kerr_geometrized =
+		//	emitter_radius / (pi * b * dt_Kerr);
 
-			vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
-			vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
+		//const real_type norm = 4 * pi * a_star * cos(angle) * cos(angle);
+		//const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
+		//const real_type div =  4 * pi * a_star * cos(angle) * cos(angle);
 
-			vector_3 right_min_location = aabb_min_location;
-			right_min_location.x += epsilon;
-
-			vector_3 right_max_location = aabb_max_location;
-			right_max_location.x += epsilon;
-
-			vector_3 left_min_location = aabb_min_location;
-			left_min_location.x -= epsilon;
-
-			vector_3 left_max_location = aabb_max_location;
-			left_max_location.x -= epsilon;
-
-
-			const real_type a = a_star * emitter_mass;
-			const real_type b =
-				receiver_distance * receiver_distance
-				+ a * a * pow(cos(angle), 2.0);
-
-			const real_type dt_Kerr = sqrt(1 - emitter_radius * receiver_distance / b);
-			const real_type a_Kerr_geometrized =
-				emitter_radius / (pi * b * dt_Kerr);
+		real_type aa = a_star * emitter_mass;
+		real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
+		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
+		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
+		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 
-			const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
-				
 
-			local_count += intersect(
-				location, normal, sideways,
-				aabb_min_location, aabb_max_location,
-				receiver_radius) / (1 + pi * a_star * cos(angle));//pow(abs(up.dot(normal)), 1.0));
 
-			local_count_plus += intersect(
-				location, normal, sideways,
-				right_min_location, right_max_location,
-				receiver_radius) / (1 + pi * a_star * cos(angle));
-		}
+
+		local_count += intersect(
+			location, normal, sideways,
+			aabb_min_location, aabb_max_location,
+			receiver_radius) / (div);
+
+		local_count_plus += intersect(
+			location, normal, sideways,
+			right_min_location, right_max_location,
+			receiver_radius) / (div);
+
+		//local_count += sideways.length();
+		//local_count_plus += sideways.length();
 
 		// Update global progress periodically
 		local_progress++;
@@ -498,7 +453,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
