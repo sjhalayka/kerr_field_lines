@@ -8,7 +8,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.999;
+const real_type a_star = 0.5;
 
 const real_type angle = pi / 4.0;
 
@@ -278,23 +278,11 @@ void worker_thread(
 		left_max_location.x -= epsilon;
 
 
-		//const real_type a = a_star * emitter_mass;
-		//const real_type b =
-		//	receiver_distance * receiver_distance
-		//	+ a * a * pow(cos(angle), 2.0);
-
-		//const real_type dt_Kerr = sqrt(1 - emitter_radius * receiver_distance / b);
-		//const real_type a_Kerr_geometrized =
-		//	emitter_radius / (pi * b * dt_Kerr);
-
-		//const real_type norm = 4 * pi * a_star * cos(angle) * cos(angle);
-		//const real_type fractionality = 1.0 - 2.0 * (0.5 - fmod(a_star, 1.0));
-		//const real_type div =  4 * pi * a_star * cos(angle) * cos(angle);
-
 		real_type aa = a_star * emitter_mass;
 		real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
 		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
 		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
+
 		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 
