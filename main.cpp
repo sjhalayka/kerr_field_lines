@@ -551,7 +551,7 @@ int main(int argc, char** argv)
 
 		const real_type linear_acceleration =
 			a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
-			/ (pow(sigma, 3.0/2.0) * A);
+			/ (pow(sigma, 3.0 / 2.0) * A);
 
 		cout << linear_acceleration << endl;
 
