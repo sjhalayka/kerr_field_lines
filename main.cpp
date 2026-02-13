@@ -534,6 +534,33 @@ int main(int argc, char** argv)
 		const real_type a_Kerr_geometrized =
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
+
+		// https://claude.ai/chat/0ab27df3-a883-4dd8-9bd6-83f2b96a60b7
+		const real_type sigma =
+			receiver_distance_geometrized * receiver_distance_geometrized
+			+ a * a * cos(angle) * cos(angle);
+
+		const real_type delta =
+			receiver_distance_geometrized * receiver_distance_geometrized
+			- 2 * emitter_mass_geometrized * receiver_distance_geometrized
+			+ a * a;
+
+		const real_type A =
+			pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
+			- a * a * delta * sin(angle) * sin(angle);
+
+		const real_type linear_acceleration =
+			a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
+			/ (pow(sigma, 3.0/2.0) * A);
+
+		cout << linear_acceleration << endl;
+
+
+
+
+
+
+
 		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
