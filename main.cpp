@@ -8,14 +8,14 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.5;
+const real_type a_star = 0.0;
 
 const real_type angle = pi / 4.0;
 
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
 {
-	return 
+	return
 		point.x >= min_location.x && point.x <= max_location.x &&
 		point.y >= min_location.y && point.y <= max_location.y &&
 		point.z >= min_location.z && point.z <= max_location.z;
@@ -26,7 +26,7 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type epsilon)
 {
 	real_type l = 0.0;
-	
+
 	const real_type dt = epsilon * 0.01;
 
 	vector_3 current_position = ray_origin;
@@ -162,7 +162,7 @@ void worker_thread(
 
 
 
-		real_type Sigma_plus = emitter_radius * emitter_radius
+		real_type Sigma_plus = receiver_distance * receiver_distance
 			+ a_star * a_star * emitter_mass * emitter_mass
 			* cos(spherical.x) * cos(spherical.x);
 
