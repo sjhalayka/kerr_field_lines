@@ -8,7 +8,7 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.9;
+const real_type a_star = 0.5;
 
 const real_type angle = pi / 4.0;
 
@@ -22,101 +22,29 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 }
 
 
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius)
+
+real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type epsilon)
 {
-	// --- X axis ---
-	if (fabs(ray_dir.x) < 1e-12)
+	real_type l = 0.0;
+	
+	const real_type dt = epsilon * 0.01;
+
+	vector_3 current_position = ray_origin;
+	vector_3 step = ray_dir + sideways;
+	step.normalize();
+	step *= dt;
+
+	while (current_position.length() < max_location.x + receiver_radius * 2)
 	{
-		// Ray is parallel to X slabs
-		if (ray_origin.x < min_location.x || ray_origin.x > max_location.x)
-			return 0;
-		tmin = -1e30;
-		tmax = 1e30;
+		if (intersect_AABB(min_location, max_location, current_position))
+			l += step.length();
+
+		current_position += step;
 	}
-	else
-	{
-		tmin = (min_location.x - ray_origin.x) / ray_dir.x;
-		tmax = (max_location.x - ray_origin.x) / ray_dir.x;
-
-		if (tmin > tmax)
-			swap(tmin, tmax);
-	}
-
-	// --- Y axis ---
-	real_type tymin, tymax;
-
-	if (fabs(ray_dir.y) < 1e-12)
-	{
-		// Ray is parallel to Y slabs
-		if (ray_origin.y < min_location.y || ray_origin.y > max_location.y)
-			return 0;
-		tymin = -1e30;
-		tymax = 1e30;
-	}
-	else
-	{
-		tymin = (min_location.y - ray_origin.y) / ray_dir.y;
-		tymax = (max_location.y - ray_origin.y) / ray_dir.y;
-
-		if (tymin > tymax)
-			swap(tymin, tymax);
-	}
-
-	if ((tmin > tymax) || (tymin > tmax))
-		return 0;
-
-	if (tymin > tmin)
-		tmin = tymin;
-
-	if (tymax < tmax)
-		tmax = tymax;
-
-	// --- Z axis ---
-	real_type tzmin, tzmax;
-
-	if (fabs(ray_dir.z) < 1e-12)
-	{
-		// Ray is parallel to Z slabs
-		if (ray_origin.z < min_location.z || ray_origin.z > max_location.z)
-			return 0;
-		tzmin = -1e30;
-		tzmax = 1e30;
-	}
-	else
-	{
-		tzmin = (min_location.z - ray_origin.z) / ray_dir.z;
-		tzmax = (max_location.z - ray_origin.z) / ray_dir.z;
-
-		if (tzmin > tzmax)
-			swap(tzmin, tzmax);
-	}
-
-	if ((tmin > tzmax) || (tzmin > tmax))
-		return 0;
-
-	if (tzmin > tmin)
-		tmin = tzmin;
-
-	if (tzmax < tmax)
-		tmax = tzmax;
-
-	if (tmin < 0 || tmax < 0)
-		return 0;
-
-	vector_3 ray_hit_start = ray_origin;
-	ray_hit_start.x += ray_dir.x * tmin;
-	ray_hit_start.y += ray_dir.y * tmin;
-	ray_hit_start.z += ray_dir.z * tmin;
-
-	vector_3 ray_hit_end = ray_origin;
-	ray_hit_end.x += ray_dir.x * tmax;
-	ray_hit_end.y += ray_dir.y * tmax;
-	ray_hit_end.z += ray_dir.z * tmax;
-
-	real_type l = (ray_hit_end - ray_hit_start).length();
 
 	return l;
 }
+
 
 real_type intersect(
 	const vector_3 location,
@@ -124,11 +52,12 @@ real_type intersect(
 	const vector_3 sideways,
 	const vector_3 aabb_min_location,
 	const vector_3 aabb_max_location,
-	const real_type receiver_radius)
+	const real_type receiver_radius,
+	const real_type epsilon)
 {
 	real_type tmin = 0, tmax = 0;
 
-	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius);
+	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius, epsilon);
 }
 
 // Thread-local versions of random functions that take generator and distribution as parameters
@@ -220,10 +149,33 @@ void worker_thread(
 		const vector_3 normal = (location - r).normalize();
 		const vector_3 spherical = cartesianToSpherical(normal);
 
+
+
+		const real_type a = a_star * emitter_mass;
+		const real_type sigma =
+			receiver_distance * receiver_distance
+			+ a * a * cos(angle) * cos(angle);
+
 		vector_3 sideways = normal.cross(up);
-		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
+
+		//real_type sideways_length = a * sin(spherical.x) / sqrt(sigma);
+
+
+
+		real_type Sigma_plus = emitter_radius * emitter_radius
+			+ a_star * a_star * emitter_mass * emitter_mass
+			* cos(spherical.x) * cos(spherical.x);
+
+		real_type sideways_length = a_star * emitter_mass * sin(spherical.x) / sqrt(Sigma_plus);
+
 		sideways.normalize();
 		sideways *= sideways_length;
+
+
+		//vector_3 sideways = normal.cross(up);
+		//real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
+		//sideways.normalize();
+		//sideways *= sideways_length;
 
 
 		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
@@ -235,18 +187,12 @@ void worker_thread(
 		vector_3 right_max_location = aabb_max_location;
 		right_max_location.x += epsilon;
 
-		vector_3 left_min_location = aabb_min_location;
-		left_min_location.x -= epsilon;
-
-		vector_3 left_max_location = aabb_max_location;
-		left_max_location.x -= epsilon;
-
 		// Z-shifted AABB for frame dragging (azimuthal direction)
 		vector_3 forward_min_location = aabb_min_location;
-		forward_min_location.z += epsilon;
+		forward_min_location.z -= epsilon;
 
 		vector_3 forward_max_location = aabb_max_location;
-		forward_max_location.z += epsilon;
+		forward_max_location.z -= epsilon;
 
 
 		real_type aa = a_star * emitter_mass;
@@ -261,17 +207,17 @@ void worker_thread(
 		local_count += intersect(
 			location, normal, sideways,
 			aabb_min_location, aabb_max_location,
-			receiver_radius) / div;
+			receiver_radius, epsilon) / div;
 
 		local_count_plus += intersect(
 			location, normal, sideways,
 			right_min_location, right_max_location,
-			receiver_radius) / div;
+			receiver_radius, epsilon) / div;
 
 		local_count_z_plus += intersect(
 			location, normal, sideways,
 			forward_min_location, forward_max_location,
-			receiver_radius) / div;
+			receiver_radius, epsilon) / div;
 
 		// Update global progress periodically
 		local_progress++;
@@ -607,7 +553,6 @@ int main(int argc, char** argv)
 			a_star);
 
 
-		cout << "linear acceleration " << linear_acceleration << endl;
 
 
 		//cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
@@ -618,7 +563,8 @@ int main(int argc, char** argv)
 		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
 
 		// https://claude.ai/chat/bc1ba713-3e0c-4513-9d21-cfaf991e3f9f
-		//cout << linear_acceleration / a_flat_geometrized_z << endl;
+		cout << "linear acceleration " << linear_acceleration << endl;
+		cout << linear_acceleration / a_flat_geometrized_z << endl;
 
 
 
