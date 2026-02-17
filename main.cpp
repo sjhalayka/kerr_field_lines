@@ -189,10 +189,10 @@ void worker_thread(
 
 		// Z-shifted AABB for frame dragging (azimuthal direction)
 		vector_3 forward_min_location = aabb_min_location;
-		forward_min_location.z -= epsilon;
+		forward_min_location.z += epsilon;
 
 		vector_3 forward_max_location = aabb_max_location;
-		forward_max_location.z -= epsilon;
+		forward_max_location.z += epsilon;
 
 
 		real_type aa = a_star * emitter_mass;
