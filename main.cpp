@@ -8,12 +8,12 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.0;
+const real_type a_star = 0.5;
 
 const real_type angle = pi / 4.0;
 
 
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
+real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
 {
 	return
 		point.x >= min_location.x && point.x <= max_location.x &&
@@ -36,7 +36,7 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 
 	while (current_position.length() < max_location.x + receiver_radius * 2)
 	{
-		if (intersect_AABB(min_location, max_location, current_position))
+		if (intersect_point_AABB(min_location, max_location, current_position))
 			l += step.length();
 
 		current_position += step;
