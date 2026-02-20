@@ -8,9 +8,10 @@
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
-const real_type a_star = 0.5;
 
-const real_type angle = pi / 4.0;
+
+const real_type a_star = 0.999;
+const real_type angle = pi / 2.0;
 
 
 real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
@@ -23,23 +24,48 @@ real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_l
 
 
 
-real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type epsilon)
+real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type emitter_radius, const real_type epsilon)
 {
 	real_type l = 0.0;
 
-	const real_type dt = epsilon * 0.01;
+	const real_type dt = epsilon * 0.1;
+
+	// Angular velocity around Y axis: omega = v / r_cylindrical
+	// Use cylindrical radius (distance from Y axis), not spherical radius.
+	// At the pole sin(theta)->0, but so does sideways.length(), so omega stays finite.
+	real_type cyl_radius = sqrt(ray_origin.x * ray_origin.x + ray_origin.z * ray_origin.z);
+	real_type omega = (cyl_radius > 1e-15) ? sideways.length() / cyl_radius : 0.0;
+
+
+
+	
+	
+	
+	vector_3 forward = ray_dir;
+	forward.normalize();
+	forward *= dt;
 
 	vector_3 current_position = ray_origin;
-	vector_3 step = ray_dir + sideways;
-	step.normalize();
-	step *= dt;
 
 	while (current_position.length() < max_location.x + receiver_radius * 2)
 	{
-		if (intersect_point_AABB(min_location, max_location, current_position))
-			l += step.length();
+		vector_3 prev_position = current_position;
 
-		current_position += step;
+		// 1. Advance along ray direction
+		current_position += forward;
+
+		// 2. Rotate current position around Y axis by omega * dt
+		real_type rot_angle = omega * dt;
+		real_type c = cos(rot_angle);
+		real_type s = sin(rot_angle);
+		real_type new_x = current_position.x * c + current_position.z * s;
+		real_type new_z = -current_position.x * s + current_position.z * c;
+		current_position.x = new_x;
+		current_position.z = new_z;
+
+		// Accumulate path length inside AABB
+		if (intersect_point_AABB(min_location, max_location, current_position))
+			l += (current_position - prev_position).length();
 	}
 
 	return l;
@@ -53,11 +79,12 @@ real_type intersect(
 	const vector_3 aabb_min_location,
 	const vector_3 aabb_max_location,
 	const real_type receiver_radius,
+	const real_type emitter_radius,
 	const real_type epsilon)
 {
 	real_type tmin = 0, tmax = 0;
 
-	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius, epsilon);
+	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius, emitter_radius, epsilon);
 }
 
 // Thread-local versions of random functions that take generator and distribution as parameters
@@ -164,9 +191,9 @@ void worker_thread(
 
 		real_type Sigma_plus = receiver_distance * receiver_distance
 			+ a_star * a_star * emitter_mass * emitter_mass
-			* cos(spherical.x) * cos(spherical.x);
+			* cos(angle) * cos(angle);
 
-		real_type sideways_length = a_star * emitter_mass * sin(spherical.x) / sqrt(Sigma_plus);
+		real_type sideways_length = a_star * emitter_mass * sin(angle) / sqrt(Sigma_plus);
 
 		sideways.normalize();
 		sideways *= sideways_length;
@@ -203,21 +230,27 @@ void worker_thread(
 		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 
+		//real_type Delta_Kerr = receiver_distance * receiver_distance
+		//	- 2.0 * emitter_mass * receiver_distance + aa * aa;
+		//real_type Delta_Sch = receiver_distance * receiver_distance
+		//	- 2.0 * emitter_mass * receiver_distance;
+
+		//div *= sqrt(fabs(Delta_Kerr) / fabs(Delta_Sch));
 
 		local_count += intersect(
 			location, normal, sideways,
 			aabb_min_location, aabb_max_location,
-			receiver_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon) / div;
 
 		local_count_plus += intersect(
 			location, normal, sideways,
 			right_min_location, right_max_location,
-			receiver_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon) / div;
 
 		local_count_z_plus += intersect(
 			location, normal, sideways,
 			forward_min_location, forward_max_location,
-			receiver_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon) / div;
 
 		// Update global progress periodically
 		local_progress++;
@@ -406,7 +439,7 @@ int main(int argc, char** argv)
 	cout << setprecision(15);
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e10;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
@@ -525,20 +558,20 @@ int main(int argc, char** argv)
 			emitter_radius_geometrized / (pi * b * dt_Kerr);
 
 
-		// https://claude.ai/chat/0ab27df3-a883-4dd8-9bd6-83f2b96a60b7
-		// https://grok.com/c/b4c11555-c459-4104-93f3-fd7b43374b42?rid=723b4c28-b472-496b-8a7c-930fb503f713
-		const real_type sigma =
-			receiver_distance_geometrized * receiver_distance_geometrized
-			+ a * a * cos(angle) * cos(angle);
+		//// https://claude.ai/chat/0ab27df3-a883-4dd8-9bd6-83f2b96a60b7
+		//// https://grok.com/c/b4c11555-c459-4104-93f3-fd7b43374b42?rid=723b4c28-b472-496b-8a7c-930fb503f713
+		//const real_type sigma =
+		//	receiver_distance_geometrized * receiver_distance_geometrized
+		//	+ a * a * cos(angle) * cos(angle);
 
-		const real_type delta =
-			receiver_distance_geometrized * receiver_distance_geometrized
-			- 2 * emitter_mass_geometrized * receiver_distance_geometrized
-			+ a * a;
+		//const real_type delta =
+		//	receiver_distance_geometrized * receiver_distance_geometrized
+		//	- 2 * emitter_mass_geometrized * receiver_distance_geometrized
+		//	+ a * a;
 
-		const real_type A =
-			pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
-			- a * a * delta * sin(angle) * sin(angle);
+		//const real_type A =
+		//	pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
+		//	- a * a * delta * sin(angle) * sin(angle);
 
 		//const real_type linear_acceleration =
 		//	a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
@@ -563,10 +596,13 @@ int main(int argc, char** argv)
 		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
 
 		// https://claude.ai/chat/bc1ba713-3e0c-4513-9d21-cfaf991e3f9f
+
+		cout << "a_flat_geometrized_z (azimuthal) " << a_flat_geometrized_z << endl;
 		cout << "linear acceleration " << linear_acceleration << endl;
+
 		cout << linear_acceleration / a_flat_geometrized_z << endl;
 
-
+		exit(0);
 
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
