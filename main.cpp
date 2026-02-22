@@ -87,6 +87,46 @@ real_type intersect(
 	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius, emitter_radius, epsilon);
 }
 
+
+
+
+
+real_type mean(const vector<real_type>& src)
+{
+	real_type m = 0;
+	real_type size = static_cast<real_type>(src.size());
+
+	for (size_t i = 0; i < src.size(); i++)
+		m += src[i];
+
+	m /= size;
+
+	return m;
+}
+
+real_type standard_deviation(const vector<real_type>& src)
+{
+	real_type m = mean(src);
+	real_type size = static_cast<real_type>(src.size());
+
+	real_type sq_diff = 0;
+
+	for (size_t i = 0; i < src.size(); i++)
+	{
+		real_type diff = src[i] - m;
+		sq_diff += diff * diff;
+	}
+
+	sq_diff /= size;
+
+	return sqrt(sq_diff);
+}
+
+
+
+
+
+
 // Thread-local versions of random functions that take generator and distribution as parameters
 vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
 	std::mt19937& local_gen,
@@ -110,7 +150,7 @@ vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
 
 
 vector_3 random_squashed_vector(std::mt19937& local_gen,
-	std::uniform_real_distribution<real_type>& local_dis, 
+	std::uniform_real_distribution<real_type>& local_dis,
 	const real_type mass,
 	const real_type a_star)
 {
@@ -187,6 +227,17 @@ void worker_thread(
 
 	const vector_3 up(0, 1, 0);
 
+	real_type aa = a_star * emitter_mass;
+	real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
+	real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
+	real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
+
+	real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
+
+
+
+
+
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
 		//vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
@@ -208,7 +259,7 @@ void worker_thread(
 		r.rotate_z(angle);
 
 		const vector_3 normal = (location - r).normalize();
-		const vector_3 spherical = cartesianToSpherical(normal);
+		//const vector_3 spherical = cartesianToSpherical(normal);
 
 
 
@@ -256,12 +307,6 @@ void worker_thread(
 		forward_max_location.z += epsilon;
 
 
-		real_type aa = a_star * emitter_mass;
-		real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
-		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
-		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
-
-		real_type div = 2 * (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 		//div = 1;
 
@@ -474,14 +519,14 @@ int main(int argc, char** argv)
 	cout << setprecision(15);
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
 
 	const real_type emitter_radius_geometrized =
 		//emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
-		emitter_mass_geometrized * sqrt(2 + 2*sqrt(1 - a_star*a_star));
+		emitter_mass_geometrized * sqrt(2 + 2 * sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
@@ -513,7 +558,12 @@ int main(int argc, char** argv)
 		receiver_radius_geometrized;
 
 
-	for (size_t i = 0; i < pos_res; i++)
+
+
+	vector<real_type> measures;
+
+
+	for (size_t i = 0; i < pos_res;)
 	{
 		cout << "\n=== Step " << (i + 1) << " of " << pos_res << " ===" << endl;
 
@@ -633,14 +683,19 @@ int main(int argc, char** argv)
 		//cout << "a_flat_geometrized (sideways/frame drag) " << a_flat_geometrized_z << endl;
 		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
 
-		// https://claude.ai/chat/bc1ba713-3e0c-4513-9d21-cfaf991e3f9f
+		//// https://claude.ai/chat/bc1ba713-3e0c-4513-9d21-cfaf991e3f9f
 
-		cout << "a_flat_geometrized_z (azimuthal) " << a_flat_geometrized_z << endl;
-		cout << "linear acceleration " << linear_acceleration << endl;
+		//cout << "a_flat_geometrized_z (azimuthal) " << a_flat_geometrized_z << endl;
+		//cout << "linear acceleration " << linear_acceleration << endl;
 
-		cout << linear_acceleration / a_flat_geometrized_z << endl;
+		//cout << linear_acceleration / a_flat_geometrized_z << endl;
 
-		exit(0);
+		measures.push_back(a_Kerr_geometrized / a_flat_geometrized);
+
+		cout << mean(measures) << " +/- " << standard_deviation(measures) << endl;
+
+		i = 0;
+		continue;
 
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
