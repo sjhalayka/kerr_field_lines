@@ -474,7 +474,7 @@ int main(int argc, char** argv)
 	cout << setprecision(15);
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e10;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
