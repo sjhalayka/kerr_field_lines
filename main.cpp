@@ -38,9 +38,9 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 
 
 
-	
-	
-	
+
+
+
 	vector_3 forward = ray_dir;
 	forward.normalize();
 	forward *= dt;
@@ -105,6 +105,32 @@ vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
 	return rr.normalize();
 }
 
+
+
+
+
+vector_3 random_squashed_vector(std::mt19937& local_gen,
+	std::uniform_real_distribution<real_type>& local_dis, 
+	const real_type mass,
+	const real_type a_star)
+{
+	double a_ = a_star * mass;
+
+	double phi = local_dis(local_gen);
+	double cos_theta = local_dis(local_gen);
+	double sin_theta = std::sqrt(1.0 - cos_theta * cos_theta);
+
+	double r_plus_ = mass + std::sqrt(mass * mass - a_ * a_);
+	double R_equator_ = std::sqrt(r_plus_ * r_plus_ + a_ * a_);
+
+	return vector_3(
+		R_equator_ * sin_theta * std::cos(phi),
+		R_equator_ * sin_theta * std::sin(phi),
+		r_plus_ * cos_theta);
+}
+
+
+
 vector_3 random_unit_vector(std::mt19937& local_gen,
 	std::uniform_real_distribution<real_type>& local_dis)
 {
@@ -163,8 +189,16 @@ void worker_thread(
 
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
-		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
-		vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
+		//vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
+		//vector_3 r = random_unit_vector(local_gen, local_dis) * emitter_radius;
+
+		vector_3 location = random_squashed_vector(local_gen, local_dis, emitter_mass, a_star);
+		vector_3 r = random_squashed_vector(local_gen, local_dis, emitter_mass, a_star);
+
+		//cout << location.length() / emitter_radius << endl;
+
+
+
 
 		const vector_3 pre_rotate_normal = (location - r).normalize();
 
@@ -229,6 +263,7 @@ void worker_thread(
 
 		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
+		//div = 1;
 
 		//real_type Delta_Kerr = receiver_distance * receiver_distance
 		//	- 2.0 * emitter_mass * receiver_distance + aa * aa;
@@ -439,22 +474,25 @@ int main(int argc, char** argv)
 	cout << setprecision(15);
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
 
 	const real_type emitter_radius_geometrized =
-		emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
+		//emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
+		emitter_mass_geometrized * sqrt(2 + 2*sqrt(1 - a_star*a_star));
 
 	const real_type receiver_radius_geometrized =
 		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
 
 	const real_type emitter_area_geometrized =
-		4 * pi
-		* (emitter_radius_geometrized * emitter_radius_geometrized
-			+ a_star * a_star
-			* emitter_mass_geometrized * emitter_mass_geometrized);
+		//4 * pi
+		//* (emitter_radius_geometrized * emitter_radius_geometrized
+		//	+ a_star * a_star
+		//	* emitter_mass_geometrized * emitter_mass_geometrized);
+		4 * pi * emitter_radius_geometrized * emitter_radius_geometrized;
+
 
 
 
