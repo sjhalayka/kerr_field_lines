@@ -10,7 +10,7 @@
 std::atomic<long long unsigned int> global_progress(0);
 
 
-const real_type a_star = 0.999;
+const real_type a_star = 0.5;
 const real_type angle = pi / 2.0;
 
 
@@ -21,8 +21,6 @@ real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_l
 		point.y >= min_location.y && point.y <= max_location.y &&
 		point.z >= min_location.z && point.z <= max_location.z;
 }
-
-
 
 real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type emitter_radius, const real_type epsilon)
 {
@@ -35,11 +33,6 @@ real_type intersect_AABB(const vector_3 min_location, const vector_3 max_locatio
 	// At the pole sin(theta)->0, but so does sideways.length(), so omega stays finite.
 	real_type cyl_radius = sqrt(ray_origin.x * ray_origin.x + ray_origin.z * ray_origin.z);
 	real_type omega = (cyl_radius > 1e-15) ? sideways.length() / cyl_radius : 0.0;
-
-
-
-
-
 
 	vector_3 forward = ray_dir;
 	forward.normalize();
@@ -87,10 +80,6 @@ real_type intersect(
 	return intersect_AABB(aabb_min_location, aabb_max_location, location, normal, sideways, tmin, tmax, receiver_radius, emitter_radius, epsilon);
 }
 
-
-
-
-
 real_type mean(const vector<real_type>& src)
 {
 	real_type m = 0;
@@ -122,33 +111,6 @@ real_type standard_deviation(const vector<real_type>& src)
 	return sqrt(sq_diff);
 }
 
-
-
-
-
-
-// Thread-local versions of random functions that take generator and distribution as parameters
-vector_3 random_cosine_weighted_hemisphere(vector_3 normal,
-	std::mt19937& local_gen,
-	std::uniform_real_distribution<real_type>& local_dis)
-{
-	vector_3 r = vector_3(local_dis(local_gen), local_dis(local_gen), 0.0);
-	vector_3 uu = normal.cross(vector_3(0.0, 1.0, 1.0)).normalize();
-	vector_3 vv = uu.cross(normal);
-
-	double ra = sqrt(r.y);
-	double rx = ra * cos(2.0 * pi * r.x);
-	double ry = ra * sin(2.0 * pi * r.x);
-	double rz = sqrt(1.0 - r.y);
-	vector_3 rr = vector_3(uu * rx + vv * ry + normal * rz);
-
-	return rr.normalize();
-}
-
-
-
-
-
 vector_3 random_squashed_vector(std::mt19937& local_gen,
 	std::uniform_real_distribution<real_type>& local_dis,
 	const real_type mass,
@@ -169,31 +131,6 @@ vector_3 random_squashed_vector(std::mt19937& local_gen,
 		r_plus_ * cos_theta);
 }
 
-
-
-vector_3 random_unit_vector(std::mt19937& local_gen,
-	std::uniform_real_distribution<real_type>& local_dis)
-{
-	const real_type z = local_dis(local_gen) * 2.0 - 1.0;
-	const real_type a = local_dis(local_gen) * 2.0 * pi;
-
-	const real_type r = sqrt(1.0f - z * z);
-	const real_type x = r * cos(a);
-	const real_type y = r * sin(a);
-
-	return vector_3(x, y, z).normalize();
-}
-
-
-vector_3 cartesianToSpherical(vector_3 input)
-{
-	vector_3 s;
-	s.z = std::sqrt(input.x * input.x + input.y * input.y + input.z * input.z); // distance (radius) - calculate first!
-	s.x = std::acos(input.z / s.z);          // polar angle (theta/colatitude)
-	s.y = std::atan2(input.y, input.x);              // azimuthal angle (phi)
-
-	return s;
-}
 
 
 
@@ -227,12 +164,12 @@ void worker_thread(
 
 	const vector_3 up(0, 1, 0);
 
-	real_type aa = a_star * emitter_mass;
-	real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
-	real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
-	real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
+	//real_type aa = a_star * emitter_mass;
+	//real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
+	//real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
+	//real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
 
-	real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
+	//real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 
 
@@ -320,17 +257,17 @@ void worker_thread(
 		local_count += intersect(
 			location, normal, sideways,
 			aabb_min_location, aabb_max_location,
-			receiver_radius, emitter_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon);
 
 		local_count_plus += intersect(
 			location, normal, sideways,
 			right_min_location, right_max_location,
-			receiver_radius, emitter_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon);
 
 		local_count_z_plus += intersect(
 			location, normal, sideways,
 			forward_min_location, forward_max_location,
-			receiver_radius, emitter_radius, epsilon) / div;
+			receiver_radius, emitter_radius, epsilon);
 
 		// Update global progress periodically
 		local_progress++;
@@ -525,17 +462,12 @@ int main(int argc, char** argv)
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
 
 	const real_type emitter_radius_geometrized =
-		//emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
 		emitter_mass_geometrized * sqrt(2 + 2 * sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
-		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
+		emitter_radius_geometrized * 0.01;
 
 	const real_type emitter_area_geometrized =
-		//4 * pi
-		//* (emitter_radius_geometrized * emitter_radius_geometrized
-		//	+ a_star * a_star
-		//	* emitter_mass_geometrized * emitter_mass_geometrized);
 		4 * pi * emitter_radius_geometrized * emitter_radius_geometrized;
 
 
@@ -593,13 +525,26 @@ int main(int argc, char** argv)
 			collision_count_plus_minus_collision_count
 			/ epsilon;
 
+		real_type aa = a_star * emitter_mass_geometrized;
+		real_type bb = receiver_distance_geometrized * receiver_distance_geometrized + aa * aa * cos(angle) * cos(angle);
+		real_type dt_kerr = sqrt(1.0 - emitter_radius_geometrized * receiver_distance_geometrized / bb);
+		real_type dt_sch = sqrt(1.0 - emitter_radius_geometrized / receiver_distance_geometrized);
+
+		real_type div = (bb * dt_kerr) / (receiver_distance_geometrized * receiver_distance_geometrized * dt_sch);
+
+
 		// Radial: g variable
 		real_type gradient_strength =
 			-gradient_integer
 			/
-			(2.0 * receiver_radius_geometrized
+			(4.0 * receiver_radius_geometrized
 				* receiver_radius_geometrized
-				* receiver_radius_geometrized);
+				* receiver_radius_geometrized
+				* div);
+
+
+
+
 
 		// Sideways (frame dragging): alpha variable
 		const real_type gradient_integer_z =
@@ -610,9 +555,10 @@ int main(int argc, char** argv)
 		real_type gradient_strength_z =
 			-gradient_integer_z
 			/
-			(2.0 * receiver_radius_geometrized
+			(4.0 * receiver_radius_geometrized
 				* receiver_radius_geometrized
-				* receiver_radius_geometrized);
+				* receiver_radius_geometrized
+				* div);
 
 		const real_type a_Newton_geometrized =
 			sqrt(
