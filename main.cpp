@@ -261,7 +261,7 @@ void worker_thread(
 		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
 		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
 
-		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
+		real_type div = 2 * (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 		//div = 1;
 
