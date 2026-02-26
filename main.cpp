@@ -9,7 +9,7 @@
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-const real_type a_star = 0.0;
+const real_type a_star = 0.5;
 const real_type angle = pi / 4.0;
 
 
