@@ -10,7 +10,7 @@ using namespace std;
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-const real_type a_star = 0.5;
+const real_type a_star = 0.999;
 const real_type angle = pi / 4.0;
 
 
@@ -38,7 +38,7 @@ pair<real_type, real_type> intersect_AABB(
 	real_type l = 0.0;
 	real_type l_sideways = 0.0;
 
-	const real_type dt = epsilon * 0.01;
+	const real_type dt = epsilon * 0.1;
 
 	vector_3 forward = ray_dir;
 	forward.normalize();
@@ -412,7 +412,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
@@ -421,13 +421,8 @@ int main(int argc, char** argv)
 		emitter_mass_geometrized * (1 + sqrt(1 - a_star * a_star));
 
 	const real_type receiver_radius_geometrized =
-		emitter_radius_geometrized * 0.01; // Minimum one Planck unit
+		emitter_radius_geometrized * 0.01;
 
-	const real_type emitter_area_geometrized =
-		4 * pi
-		* (emitter_radius_geometrized * emitter_radius_geometrized
-			+ a_star * a_star
-			* emitter_mass_geometrized * emitter_mass_geometrized);
 
 
 
@@ -446,6 +441,10 @@ int main(int argc, char** argv)
 
 	const real_type epsilon =
 		receiver_radius_geometrized;
+
+
+
+
 
 
 	for (size_t i = 0; i < pos_res; i++)
@@ -515,6 +514,12 @@ int main(int argc, char** argv)
 			gradient_strength * receiver_distance_geometrized * log(2)
 			/ (8.0 * emitter_mass_geometrized);
 
+		const real_type a_flat_geometrized_sideways =
+			gradient_strength_sideways * receiver_distance_geometrized * log(2)
+			/ (8.0 * emitter_mass_geometrized);
+
+
+
 		const real_type a = a_star * emitter_mass_geometrized;
 		const real_type b =
 			receiver_distance_geometrized * receiver_distance_geometrized
@@ -531,30 +536,26 @@ int main(int argc, char** argv)
 
 		//// https://claude.ai/chat/0ab27df3-a883-4dd8-9bd6-83f2b96a60b7
 		//// https://grok.com/c/b4c11555-c459-4104-93f3-fd7b43374b42?rid=723b4c28-b472-496b-8a7c-930fb503f713
-		const real_type sigma =
-			receiver_distance_geometrized * receiver_distance_geometrized
-			+ a * a * cos(angle) * cos(angle);
+		//const real_type sigma =
+		//	receiver_distance_geometrized * receiver_distance_geometrized
+		//	+ a * a * cos(angle) * cos(angle);
 
-		const real_type delta =
-			receiver_distance_geometrized * receiver_distance_geometrized
-			- 2 * emitter_mass_geometrized * receiver_distance_geometrized
-			+ a * a;
+		//const real_type delta =
+		//	receiver_distance_geometrized * receiver_distance_geometrized
+		//	- 2 * emitter_mass_geometrized * receiver_distance_geometrized
+		//	+ a * a;
 
-		const real_type A =
-			pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
-			- a * a * delta * sin(angle) * sin(angle);
-
-		const real_type linear_acceleration =
-			a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
-			/ (pow(sigma, 3.0 / 2.0) * a);
+		//const real_type linear_acceleration =
+		//	a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
+		//	/ (pow(sigma, 3.0 / 2.0) * a);
 
 
 
-		//double linear_acceleration = sideways_acceleration(
-		//	receiver_distance_geometrized,
-		//	angle,
-		//	emitter_mass_geometrized,
-		//	a_star);
+		double linear_acceleration = sideways_acceleration(
+			receiver_distance_geometrized,
+			angle,
+			emitter_mass_geometrized,
+			a_star);
 
 
 
@@ -572,8 +573,14 @@ int main(int argc, char** argv)
 		cout << "a_Schwarzschild_geometrized " << a_Schwarzschild_geometrized << endl;
 		cout << "a_Kerr_geometrized " << a_Kerr_geometrized << endl;
 		cout << "a_Newton_geometrized " << a_Newton_geometrized << endl;
+
+		cout << endl;
 		cout << "a_flat_geometrized " << a_flat_geometrized << endl;
-		cout << a_Kerr_geometrized / a_flat_geometrized << endl;
+		cout << "a_Kerr_geometrized / a_flat_geometrized " << a_Kerr_geometrized / a_flat_geometrized << endl;
+		cout << "a_flat_geometrized_sideways " << a_flat_geometrized_sideways << endl;
+		cout << "linear_acceleration " << linear_acceleration << endl;
+		cout << "linear_acceleration / a_flat_geometrized_sideways " << linear_acceleration / a_flat_geometrized_sideways << endl;
+		cout << endl << endl;
 
 		outfile_numerical << receiver_distance_geometrized << " " << a_flat_geometrized << endl;
 		outfile_analytical << receiver_distance_geometrized << " " << a_Kerr_geometrized << endl;
