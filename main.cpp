@@ -5,12 +5,13 @@
 #include <chrono>
 #include <iomanip>
 #include <algorithm>
+using namespace std;
 
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-const real_type a_star = 0.999;
-const real_type angle = pi / 2.0;
+const real_type a_star = 0.5;
+const real_type angle = pi / 4.0;
 
 
 real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
@@ -21,30 +22,8 @@ real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_l
 		point.z >= min_location.z && point.z <= max_location.z;
 }
 
-//real_type intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax, const real_type receiver_radius, const real_type epsilon)
-//{
-//	real_type l = 0.0;
-//
-//	const real_type dt = epsilon * 0.01;
-//
-//	vector_3 current_position = ray_origin;
-//	vector_3 step = ray_dir;// +sideways;
-//	step.normalize();
-//	step *= dt;
-//
-//	while (current_position.length() < max_location.x + receiver_radius * 2)
-//	{
-//		if (intersect_point_AABB(min_location, max_location, current_position))
-//			l += step.length();
-//
-//		current_position += step;
-//	}
-//
-//	return l;
-//}
 
-
-real_type intersect_AABB(
+pair<real_type, real_type> intersect_AABB(
 	const vector_3 min_location, 
 	const vector_3 max_location, 
 	const vector_3 ray_origin, 
@@ -57,18 +36,15 @@ real_type intersect_AABB(
 	const real_type epsilon)
 {
 	real_type l = 0.0;
+	real_type l_sideways = 0.0;
 
 	const real_type dt = epsilon * 0.01;
-
-	// Angular velocity around Y axis: omega = v / r_cylindrical
-	// Use cylindrical radius (distance from Y axis), not spherical radius.
-	// At the pole sin(theta)->0, but so does sideways.length(), so omega stays finite.
-	real_type cyl_radius = sqrt(ray_origin.x * ray_origin.x + ray_origin.z * ray_origin.z);
-	real_type omega = (cyl_radius > 1e-15) ? sideways.length() / cyl_radius : 0.0;
 
 	vector_3 forward = ray_dir;
 	forward.normalize();
 	forward *= dt;
+
+	sideways *= dt;
 
 	vector_3 current_position = ray_origin;
 
@@ -79,25 +55,35 @@ real_type intersect_AABB(
 		// 1. Advance along ray direction
 		current_position += forward;
 
-		// 2. Rotate current position around Y axis by omega * dt
-		//real_type rot_angle = omega * dt;
-		//real_type c = cos(rot_angle);
-		//real_type s = sin(rot_angle);
-		//real_type new_x = current_position.x * c + current_position.z * s;
-		//real_type new_z = -current_position.x * s + current_position.z * c;
-		//current_position.x = new_x;
-		//current_position.z = new_z;
+//		// Angular velocity around Y axis: omega = v / r_cylindrical
+//// Use cylindrical radius (distance from Y axis), not spherical radius.
+//// At the pole sin(theta)->0, but so does sideways.length(), so omega stays finite.
+//		real_type cyl_radius = sqrt(current_position.x * current_position.x + current_position.z * current_position.z);
+//		real_type omega = (cyl_radius > 1e-15) ? sideways.length() / cyl_radius : 0.0;
+//
+//
+//		// 2. Rotate current position around Y axis by omega * dt
+//		real_type rot_angle = omega * dt;
+//		real_type c = cos(rot_angle);
+//		real_type s = sin(rot_angle);
+//		real_type new_x = current_position.x * c + current_position.z * s;
+//		real_type new_z = -current_position.x * s + current_position.z * c;
+//		current_position.x = new_x;
+//		current_position.z = new_z;
 
 		// Accumulate path length inside AABB
 		if (intersect_point_AABB(min_location, max_location, current_position))
+		{
 			l += (current_position - prev_position).length();
+			l_sideways += sideways.length();
+		}
 	}
 
-	return l;
+	return pair<real_type, real_type>(l, l_sideways);
 }
 
 
-real_type intersect(
+pair<real_type, real_type> intersect(
 	const vector_3 location,
 	const vector_3 normal,
 	const vector_3 sideways,
@@ -108,7 +94,6 @@ real_type intersect(
 	const real_type epsilon)
 {
 	real_type tmin = 0, tmax = 0;
-
 
 	return intersect_AABB(
 		aabb_min_location, 
@@ -123,7 +108,8 @@ real_type intersect(
 		epsilon);
 }
 
-vector_3 random_unit_vector(std::mt19937& local_gen,
+vector_3 random_unit_vector(
+	std::mt19937& local_gen,
 	std::uniform_real_distribution<real_type>& local_dis)
 {
 	const real_type z = local_dis(local_gen) * 2.0 - 1.0;
@@ -162,7 +148,9 @@ void worker_thread(
 	const real_type receiver_radius,
 	const real_type epsilon,
 	real_type& result_count,
-	real_type& result_count_plus)
+	real_type& result_count_plus,
+	real_type& result_count_sideways,
+	real_type& result_count_plus_sideways)
 {
 	// Thread-local random number generator
 	std::mt19937 local_gen(thread_seed);
@@ -170,6 +158,8 @@ void worker_thread(
 
 	real_type local_count = 0;
 	real_type local_count_plus = 0;
+	real_type local_count_sideways = 0;
+	real_type local_count_plus_sideways = 0;
 
 	// Update progress every N iterations to reduce atomic overhead
 	const long long unsigned int progress_update_interval = 10000;
@@ -217,21 +207,26 @@ void worker_thread(
 
 
 
-
-
-		local_count += intersect(
+		pair<real_type, real_type> p0 = 
+			intersect(
 			location, normal, sideways,
 			aabb_min_location, aabb_max_location,
 			receiver_radius,
 			emitter_radius,
-			epsilon) / div;
+			epsilon);
 
-		local_count_plus += intersect(
+		pair<real_type, real_type> p1 = 
+			intersect(
 			location, normal, sideways,
 			right_min_location, right_max_location,
 			receiver_radius,
 			emitter_radius,
-			epsilon) / div;
+			epsilon);
+
+		local_count += p0.first / div;
+		local_count_plus += p1.first / div;
+		local_count_sideways += p0.second / div;
+		local_count_plus_sideways += p1.second / div;
 
 		// Update global progress periodically
 		local_progress++;
@@ -250,6 +245,8 @@ void worker_thread(
 
 	result_count = local_count;
 	result_count_plus = local_count_plus;
+	result_count_sideways = local_count_sideways;
+	result_count_plus_sideways = local_count_plus_sideways;
 }
 
 // Progress monitor function that runs on main thread
@@ -282,7 +279,7 @@ void progress_monitor(long long unsigned int total_iterations, std::atomic<bool>
 	cout << "\rProgress: 100.00% | Complete!                              " << endl;
 }
 
-real_type get_intersecting_line_density(
+pair<real_type, real_type> get_intersecting_line_density(
 	const long long unsigned int n,
 	const real_type emitter_radius,
 	const real_type emitter_mass,
@@ -301,6 +298,11 @@ real_type get_intersecting_line_density(
 	std::vector<std::thread> threads;
 	std::vector<real_type> thread_counts(num_threads, 0);
 	std::vector<real_type> thread_counts_plus(num_threads, 0);
+	std::vector<real_type> thread_counts_sideways(num_threads, 0);
+	std::vector<real_type> thread_counts_plus_sideways(num_threads, 0);
+
+
+
 
 	// Flag to signal progress monitor to stop
 	std::atomic<bool> done(false);
@@ -336,8 +338,9 @@ real_type get_intersecting_line_density(
 			receiver_radius,
 			epsilon,
 			std::ref(thread_counts[t]),
-			std::ref(thread_counts_plus[t])
-		);
+			std::ref(thread_counts_plus[t]),
+			std::ref(thread_counts_sideways[t]),
+			std::ref(thread_counts_plus_sideways[t]));
 
 		current_start = thread_end;
 	}
@@ -355,14 +358,20 @@ real_type get_intersecting_line_density(
 	// Aggregate results
 	real_type total_count = 0;
 	real_type total_count_plus = 0;
+	real_type total_count_sideways = 0;
+	real_type total_count_plus_sideways = 0;
 
 	for (unsigned int t = 0; t < num_threads; t++)
 	{
 		total_count += thread_counts[t];
 		total_count_plus += thread_counts_plus[t];
+		total_count_sideways += thread_counts_sideways[t];
+		total_count_plus_sideways += thread_counts_plus_sideways[t];
 	}
 
-	return total_count_plus - total_count;
+	return pair<real_type, real_type>(
+		total_count_plus - total_count, 
+		total_count_plus_sideways - total_count_sideways);
 }
 
 
@@ -450,7 +459,7 @@ int main(int argc, char** argv)
 			receiver_distance_geometrized + epsilon;
 
 		// beta function
-		const real_type collision_count_plus_minus_collision_count =
+		const pair<real_type, real_type> collision_count_plus_minus_collision_count =
 			get_intersecting_line_density(
 				static_cast<long long unsigned int>(n),
 				emitter_radius_geometrized,
@@ -462,16 +471,32 @@ int main(int argc, char** argv)
 
 		// alpha variable
 		const real_type gradient_integer =
-			collision_count_plus_minus_collision_count
+			collision_count_plus_minus_collision_count.first
 			/ epsilon;
 
 		// g variable
-		real_type gradient_strength =
+		const real_type gradient_strength =
 			-gradient_integer
 			/
 			(2.0 * receiver_radius_geometrized
 				* receiver_radius_geometrized
 				* receiver_radius_geometrized);
+
+
+		const real_type gradient_integer_sideways =
+			collision_count_plus_minus_collision_count.second
+			/ epsilon;
+
+		const real_type gradient_strength_sideways =
+			-gradient_integer_sideways
+			/
+			(2.0 * receiver_radius_geometrized
+				* receiver_radius_geometrized
+				* receiver_radius_geometrized);
+
+
+
+
 
 		const real_type a_Newton_geometrized =
 			sqrt(
@@ -505,23 +530,23 @@ int main(int argc, char** argv)
 
 
 		//// https://claude.ai/chat/0ab27df3-a883-4dd8-9bd6-83f2b96a60b7
-//// https://grok.com/c/b4c11555-c459-4104-93f3-fd7b43374b42?rid=723b4c28-b472-496b-8a7c-930fb503f713
-const real_type sigma =
-	receiver_distance_geometrized * receiver_distance_geometrized
-	+ a * a * cos(angle) * cos(angle);
+		//// https://grok.com/c/b4c11555-c459-4104-93f3-fd7b43374b42?rid=723b4c28-b472-496b-8a7c-930fb503f713
+		const real_type sigma =
+			receiver_distance_geometrized * receiver_distance_geometrized
+			+ a * a * cos(angle) * cos(angle);
 
-const real_type delta =
-	receiver_distance_geometrized * receiver_distance_geometrized
-	- 2 * emitter_mass_geometrized * receiver_distance_geometrized
-	+ a * a;
+		const real_type delta =
+			receiver_distance_geometrized * receiver_distance_geometrized
+			- 2 * emitter_mass_geometrized * receiver_distance_geometrized
+			+ a * a;
 
-const real_type A =
-	pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
-	- a * a * delta * sin(angle) * sin(angle);
+		const real_type A =
+			pow(receiver_distance_geometrized * receiver_distance_geometrized + a * a, 2.0)
+			- a * a * delta * sin(angle) * sin(angle);
 
-const real_type linear_acceleration =
-	a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
-	/ (pow(sigma, 3.0 / 2.0) * a);
+		const real_type linear_acceleration =
+			a * a * emitter_mass_geometrized * receiver_distance_geometrized * (receiver_distance_geometrized * receiver_distance_geometrized + a * a) * sin(2.0 * angle)
+			/ (pow(sigma, 3.0 / 2.0) * a);
 
 
 
