@@ -11,7 +11,7 @@ using namespace std;
 std::atomic<long long unsigned int> global_progress(0);
 
 const real_type a_star = 0.999;
-const real_type angle = pi / 32.0;
+const real_type angle = pi / 4.0;
 
 
 real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
@@ -24,7 +24,7 @@ real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_l
 
 pair<real_type, real_type> intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax)
 {
-	pair<real_type, real_type> zero(0, 0);
+	static const pair<real_type, real_type> zero(0, 0);
 
 	// --- X axis ---
 	if (fabs(ray_dir.x) < 1e-12)
@@ -214,6 +214,15 @@ void worker_thread(
 
 	const vector_3 up(0, 1, 0);
 
+
+	real_type a = a_star * emitter_mass;
+	real_type b = receiver_distance * receiver_distance + a * a * cos(angle) * cos(angle);
+	real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / b);
+	real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
+
+	real_type div = (b * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
+
+
 	for (long long unsigned int i = start_idx; i < end_idx; i++)
 	{
 		vector_3 location = random_unit_vector(local_gen, local_dis) * emitter_radius;
@@ -228,14 +237,10 @@ void worker_thread(
 		const vector_3 spherical = cartesianToSpherical(normal);
 
 		vector_3 sideways = normal.cross(up);
-//		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
 		real_type sideways_length = a_star * sin(spherical.x) / (2.0 * emitter_mass * (1 + sqrt(1 - a_star * a_star)));
-
-
 
 		sideways.normalize();
 		sideways *= sideways_length;
-
 
 		vector_3 aabb_min_location(-receiver_radius + receiver_distance, -receiver_radius, -receiver_radius);
 		vector_3 aabb_max_location(receiver_radius + receiver_distance, receiver_radius, receiver_radius);
@@ -249,12 +254,7 @@ void worker_thread(
 
 
 
-		real_type aa = a_star * emitter_mass;
-		real_type bb = receiver_distance * receiver_distance + aa * aa * cos(angle) * cos(angle);
-		real_type dt_kerr = sqrt(1.0 - emitter_radius * receiver_distance / bb);
-		real_type dt_sch = sqrt(1.0 - emitter_radius / receiver_distance);
 
-		real_type div = (bb * dt_kerr) / (receiver_distance * receiver_distance * dt_sch);
 
 
 
@@ -276,8 +276,11 @@ void worker_thread(
 
 		local_count += p0.first / div;
 		local_count_plus += p1.first / div;
-		local_count_sideways += p0.second;// / div;
-		local_count_plus_sideways += p1.second;// / div;
+		local_count_sideways += p0.second;
+		local_count_plus_sideways += p1.second;
+
+
+
 
 		// Update global progress periodically
 		local_progress++;
@@ -463,7 +466,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e11;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
