@@ -10,7 +10,7 @@ using namespace std;
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-const real_type a_star = 0.5;
+const real_type a_star = 0.999;
 const real_type angle = pi / 32.0;
 
 
@@ -22,49 +22,115 @@ real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_l
 		point.z >= min_location.z && point.z <= max_location.z;
 }
 
-
-pair<real_type, real_type> intersect_AABB(
-	const vector_3 min_location, 
-	const vector_3 max_location, 
-	const vector_3 ray_origin, 
-	const vector_3 ray_dir, 
-	vector_3 sideways, 
-	real_type& tmin, 
-	real_type& tmax, 
-	const real_type receiver_radius, 
-	const real_type emitter_radius, 
-	const real_type epsilon)
+pair<real_type, real_type> intersect_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 ray_origin, const vector_3 ray_dir, vector_3 sideways, real_type& tmin, real_type& tmax)
 {
-	real_type l = 0.0;
-	real_type l_sideways = 0.0;
+	pair<real_type, real_type> zero(0, 0);
 
-	const real_type dt = epsilon * 0.01;
-
-	vector_3 forward = ray_dir;
-	forward.normalize();
-	forward *= dt;
-
-	sideways *= dt;
-
-	vector_3 current_position = ray_origin;
-
-	while (current_position.length() < max_location.x + receiver_radius * 2)
+	// --- X axis ---
+	if (fabs(ray_dir.x) < 1e-12)
 	{
-		vector_3 prev_position = current_position;
-
-		// 1. Advance along ray direction
-		current_position += forward;
-
-		// Accumulate path length inside AABB
-		if (intersect_point_AABB(min_location, max_location, current_position))
+		// Ray is parallel to X slabs
+		if (ray_origin.x < min_location.x || ray_origin.x > max_location.x)
 		{
-			l += (current_position - prev_position).length();
-			l_sideways += sideways.length();
+			return zero;
 		}
+			
+		tmin = -1e30;
+		tmax = 1e30;
+	}
+	else
+	{
+		tmin = (min_location.x - ray_origin.x) / ray_dir.x;
+		tmax = (max_location.x - ray_origin.x) / ray_dir.x;
+
+		if (tmin > tmax)
+			swap(tmin, tmax);
 	}
 
+	// --- Y axis ---
+	real_type tymin, tymax;
+
+	if (fabs(ray_dir.y) < 1e-12)
+	{
+		// Ray is parallel to Y slabs
+		if (ray_origin.y < min_location.y || ray_origin.y > max_location.y)
+			return zero;
+
+		tymin = -1e30;
+		tymax = 1e30;
+	}
+	else
+	{
+		tymin = (min_location.y - ray_origin.y) / ray_dir.y;
+		tymax = (max_location.y - ray_origin.y) / ray_dir.y;
+
+		if (tymin > tymax)
+			swap(tymin, tymax);
+	}
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return zero;
+
+	if (tymin > tmin)
+		tmin = tymin;
+
+	if (tymax < tmax)
+		tmax = tymax;
+
+	// --- Z axis ---
+	real_type tzmin, tzmax;
+
+	if (fabs(ray_dir.z) < 1e-12)
+	{
+		// Ray is parallel to Z slabs
+		if (ray_origin.z < min_location.z || ray_origin.z > max_location.z)
+			return zero;
+
+		tzmin = -1e30;
+		tzmax = 1e30;
+	}
+	else
+	{
+		tzmin = (min_location.z - ray_origin.z) / ray_dir.z;
+		tzmax = (max_location.z - ray_origin.z) / ray_dir.z;
+
+		if (tzmin > tzmax)
+			swap(tzmin, tzmax);
+	}
+
+	if ((tmin > tzmax) || (tzmin > tmax))
+		return zero;
+
+	if (tzmin > tmin)
+		tmin = tzmin;
+
+	if (tzmax < tmax)
+		tmax = tzmax;
+
+	if (tmin < 0 || tmax < 0)
+		return zero;
+
+	vector_3 ray_hit_start = ray_origin;
+	ray_hit_start.x += ray_dir.x * tmin;
+	ray_hit_start.y += ray_dir.y * tmin;
+	ray_hit_start.z += ray_dir.z * tmin;
+
+	vector_3 ray_hit_end = ray_origin;
+	ray_hit_end.x += ray_dir.x * tmax;
+	ray_hit_end.y += ray_dir.y * tmax;
+	ray_hit_end.z += ray_dir.z * tmax;
+
+	real_type l = (ray_hit_end - ray_hit_start).length();
+	real_type l_sideways = l*sideways.length();
 	return pair<real_type, real_type>(l, l_sideways);
 }
+
+
+
+
+
+
+
 
 
 pair<real_type, real_type> intersect(
@@ -86,10 +152,7 @@ pair<real_type, real_type> intersect(
 		normal, 
 		sideways, 
 		tmin, 
-		tmax, 
-		receiver_radius, 
-		emitter_radius,
-		epsilon);
+		tmax);
 }
 
 vector_3 random_unit_vector(
@@ -400,7 +463,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e10;
+	const real_type n = 1e9;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
