@@ -10,8 +10,8 @@ using namespace std;
 // Atomic counter for progress tracking
 std::atomic<long long unsigned int> global_progress(0);
 
-const real_type a_star = 0.999;
-const real_type angle = pi / 4.0;
+const real_type a_star = 0.5;
+const real_type angle = pi / 32.0;
 
 
 real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
@@ -38,7 +38,7 @@ pair<real_type, real_type> intersect_AABB(
 	real_type l = 0.0;
 	real_type l_sideways = 0.0;
 
-	const real_type dt = epsilon * 0.1;
+	const real_type dt = epsilon * 0.01;
 
 	vector_3 forward = ray_dir;
 	forward.normalize();
@@ -54,22 +54,6 @@ pair<real_type, real_type> intersect_AABB(
 
 		// 1. Advance along ray direction
 		current_position += forward;
-
-//		// Angular velocity around Y axis: omega = v / r_cylindrical
-//// Use cylindrical radius (distance from Y axis), not spherical radius.
-//// At the pole sin(theta)->0, but so does sideways.length(), so omega stays finite.
-//		real_type cyl_radius = sqrt(current_position.x * current_position.x + current_position.z * current_position.z);
-//		real_type omega = (cyl_radius > 1e-15) ? sideways.length() / cyl_radius : 0.0;
-//
-//
-//		// 2. Rotate current position around Y axis by omega * dt
-//		real_type rot_angle = omega * dt;
-//		real_type c = cos(rot_angle);
-//		real_type s = sin(rot_angle);
-//		real_type new_x = current_position.x * c + current_position.z * s;
-//		real_type new_z = -current_position.x * s + current_position.z * c;
-//		current_position.x = new_x;
-//		current_position.z = new_z;
 
 		// Accumulate path length inside AABB
 		if (intersect_point_AABB(min_location, max_location, current_position))
@@ -181,7 +165,11 @@ void worker_thread(
 		const vector_3 spherical = cartesianToSpherical(normal);
 
 		vector_3 sideways = normal.cross(up);
-		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
+//		real_type sideways_length = a_star * sin(spherical.x) / (1 + sqrt(1 - a_star * a_star));
+		real_type sideways_length = a_star * sin(spherical.x) / (2.0 * emitter_mass * (1 + sqrt(1 - a_star * a_star)));
+
+
+
 		sideways.normalize();
 		sideways *= sideways_length;
 
@@ -225,8 +213,8 @@ void worker_thread(
 
 		local_count += p0.first / div;
 		local_count_plus += p1.first / div;
-		local_count_sideways += p0.second / div;
-		local_count_plus_sideways += p1.second / div;
+		local_count_sideways += p0.second;// / div;
+		local_count_plus_sideways += p1.second;// / div;
 
 		// Update global progress periodically
 		local_progress++;
@@ -271,7 +259,7 @@ void progress_monitor(long long unsigned int total_iterations, std::atomic<bool>
 			eta_seconds = (elapsed / progress) * (1.0 - progress);
 		}
 
-		cout << "\rProgress: " << fixed << (progress * 100.0) << "% "
+		cout << "\rProgress: " << (progress * 100.0) << "% "
 			<< "| Elapsed: " << elapsed << "s "
 			<< "| ETA: " << static_cast<int>(eta_seconds) << "s    " << flush;
 	}
@@ -412,7 +400,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e10;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
