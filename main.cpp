@@ -11,7 +11,7 @@ using namespace std;
 std::atomic<long long unsigned int> global_progress(0);
 
 const real_type a_star = 0.999;
-const real_type angle = pi / 4.0;
+const real_type angle = pi / 32.0;
 
 
 real_type intersect_point_AABB(const vector_3 min_location, const vector_3 max_location, const vector_3 point)
@@ -34,7 +34,7 @@ pair<real_type, real_type> intersect_AABB(const vector_3 min_location, const vec
 		{
 			return zero;
 		}
-			
+
 		tmin = -1e30;
 		tmax = 1e30;
 	}
@@ -121,7 +121,7 @@ pair<real_type, real_type> intersect_AABB(const vector_3 min_location, const vec
 	ray_hit_end.z += ray_dir.z * tmax;
 
 	real_type l = (ray_hit_end - ray_hit_start).length();
-	real_type l_sideways = l*sideways.length();
+	real_type l_sideways = l * sideways.length();
 	return pair<real_type, real_type>(l, l_sideways);
 }
 
@@ -146,12 +146,12 @@ pair<real_type, real_type> intersect(
 	real_type tmin = 0, tmax = 0;
 
 	return intersect_AABB(
-		aabb_min_location, 
-		aabb_max_location, 
-		location, 
-		normal, 
-		sideways, 
-		tmin, 
+		aabb_min_location,
+		aabb_max_location,
+		location,
+		normal,
+		sideways,
+		tmin,
 		tmax);
 }
 
@@ -237,7 +237,7 @@ void worker_thread(
 		const vector_3 spherical = cartesianToSpherical(normal);
 
 		vector_3 sideways = normal.cross(up);
-		real_type sideways_length = a_star * sin(spherical.x) / (2.0 * emitter_mass * (1 + sqrt(1 - a_star * a_star)));
+		real_type sideways_length = a_star * sin(spherical.x) / (2.0*emitter_mass*(1 + sqrt(1 - a_star * a_star)));
 
 		sideways.normalize();
 		sideways *= sideways_length;
@@ -251,33 +251,45 @@ void worker_thread(
 		vector_3 right_max_location = aabb_max_location;
 		right_max_location.x += epsilon;
 
+		vector_3 forward_min_location = aabb_min_location;
+		forward_min_location.z += epsilon;
+
+		vector_3 forward_max_location = aabb_max_location;
+		forward_max_location.z += epsilon;
 
 
 
 
 
 
-
-		pair<real_type, real_type> p0 = 
+		pair<real_type, real_type> p0 =
 			intersect(
-			location, normal, sideways,
-			aabb_min_location, aabb_max_location,
-			receiver_radius,
-			emitter_radius,
-			epsilon);
+				location, normal, sideways,
+				aabb_min_location, aabb_max_location,
+				receiver_radius,
+				emitter_radius,
+				epsilon);
 
-		pair<real_type, real_type> p1 = 
+		pair<real_type, real_type> p1 =
 			intersect(
-			location, normal, sideways,
-			right_min_location, right_max_location,
-			receiver_radius,
-			emitter_radius,
-			epsilon);
+				location, normal, sideways,
+				right_min_location, right_max_location,
+				receiver_radius,
+				emitter_radius,
+				epsilon);
+
+		pair<real_type, real_type> p2 =
+			intersect(
+				location, normal, sideways,
+				forward_min_location, forward_max_location,
+				receiver_radius,
+				emitter_radius,
+				epsilon);
 
 		local_count += p0.first / div;
 		local_count_plus += p1.first / div;
-		local_count_sideways += p0.second;
-		local_count_plus_sideways += p1.second;
+		local_count_sideways += p0.second / div;
+		local_count_plus_sideways += p2.second / div;
 
 
 
@@ -424,7 +436,7 @@ pair<real_type, real_type> get_intersecting_line_density(
 	}
 
 	return pair<real_type, real_type>(
-		total_count_plus - total_count, 
+		total_count_plus - total_count,
 		total_count_plus_sideways - total_count_sideways);
 }
 
@@ -458,6 +470,44 @@ double sideways_acceleration(
 }
 
 
+struct KerrParams {
+	double a;      // spin parameter  (0 <= |a| <= 1)
+	double r;      // radial coordinate
+	double theta;  // polar angle (0 to pi)
+};	
+
+double rho_sq(const KerrParams& p) {
+	return p.r * p.r + p.a * p.a * std::pow(std::cos(p.theta), 2);
+}
+
+double delta(const KerrParams& p, double M) {
+	return p.r * p.r - 2.0 * M * p.r + p.a * p.a;
+}
+
+double sigma(const KerrParams& p, double M) {
+	double rho2 = rho_sq(p);
+	double del = delta(p, M);
+	return (p.r * p.r + p.a * p.a) * (p.r * p.r + p.a * p.a)
+		- p.a * p.a * del * std::pow(std::sin(p.theta), 2);
+}
+
+
+double zamo_sideways_acceleration(const KerrParams& p, double M) {
+	double rho2 = rho_sq(p);
+	double rho = std::sqrt(rho2);
+	double del = delta(p, M);
+	double sig = sigma(p, M);
+
+	double sin2theta = std::sin(2.0 * p.theta);  // sin(2θ)
+
+	if (std::abs(sin2theta) < 1e-14) {
+		return 0.0;  // vanishes on axis by symmetry
+	}
+
+	double term = (del / sig) - (1.0 / rho2);
+
+	return (p.a * p.a * sin2theta / (2.0 * rho)) * term;
+}
 
 int main(int argc, char** argv)
 {
@@ -466,7 +516,7 @@ int main(int argc, char** argv)
 	ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e11;
+	const real_type n = 1e10;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
@@ -612,7 +662,9 @@ int main(int argc, char** argv)
 			a_star);
 
 
+		//KerrParams p{ a_star, receiver_distance_geometrized, angle };
 
+		//double linear_acceleration = zamo_sideways_acceleration(p, emitter_mass_geometrized);
 
 
 
