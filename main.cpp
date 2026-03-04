@@ -247,16 +247,11 @@ void worker_thread(
 		vector_3 right_max_location = aabb_max_location;
 		right_max_location.x += epsilon;
 
-		vector_3 forward_min_location = aabb_min_location;
-		forward_min_location.z += epsilon;
+		//vector_3 forward_min_location = aabb_min_location;
+		//forward_min_location.z += epsilon;
 
-		vector_3 forward_max_location = aabb_max_location;
-		forward_max_location.z += epsilon;
-
-
-
-
-
+		//vector_3 forward_max_location = aabb_max_location;
+		//forward_max_location.z += epsilon;
 
 		pair<real_type, real_type> p0 =
 			intersect(
@@ -289,7 +284,6 @@ void worker_thread(
 
 
 
-
 		// Update global progress periodically
 		local_progress++;
 		if (local_progress >= progress_update_interval)
@@ -301,9 +295,8 @@ void worker_thread(
 
 	// Add any remaining progress
 	if (local_progress > 0)
-	{
 		global_progress.fetch_add(local_progress, std::memory_order_relaxed);
-	}
+
 
 	result_count = local_count;
 	result_count_plus = local_count_plus;
@@ -328,10 +321,9 @@ void progress_monitor(long long unsigned int total_iterations, std::atomic<bool>
 
 		// Estimate time remaining
 		double eta_seconds = 0;
+
 		if (progress > 0.001)
-		{
 			eta_seconds = (elapsed / progress) * (1.0 - progress);
-		}
 
 		cout << "\rProgress: " << (progress * 100.0) << "% "
 			<< "| Elapsed: " << elapsed << "s "
@@ -409,9 +401,7 @@ pair<real_type, real_type> get_intersecting_line_density(
 
 	// Wait for all worker threads to complete
 	for (auto& t : threads)
-	{
 		t.join();
-	}
 
 	// Signal monitor thread to stop and wait for it
 	done.store(true, std::memory_order_relaxed);
@@ -478,7 +468,7 @@ int main(int argc, char** argv)
 	//ofstream outfile_Newton("Newton_analytical");
 
 	// Field line count
-	const real_type n = 1e9;
+	const real_type n = 1e8;
 
 	const real_type emitter_mass_geometrized =
 		sqrt((n * log(2.0)) / (2 * pi * (1 + sqrt(1 - a_star * a_star))));
